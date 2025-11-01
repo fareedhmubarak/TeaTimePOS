@@ -36,7 +36,7 @@ const OrderPanel: React.FC<OrderPanelProps> = ({
     ${isMobileOpen ? 'translate-x-0' : 'translate-x-full'}
   `;
   
-  const isPending = invoiceNumber < 0;
+  const isPending = invoiceNumber < 0; // Note: This is for held orders (kept variable name for code consistency)
   
   // Check if the invoice is from today
   const isTodayInvoice = (() => {
@@ -197,7 +197,7 @@ const OrderPanel: React.FC<OrderPanelProps> = ({
                     disabled={!canHold || isEditing}
                     className="w-1/2 py-3 bg-red-500 text-white rounded-md text-sm font-semibold hover:bg-red-600 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
                 >
-                    {isEditing ? 'Update First' : (canHold ? 'Pending' : 'Pending Full')}
+                    {isEditing ? 'Update First' : (canHold ? 'Hold' : 'Hold Full')}
                 </button>
                 <button 
                     onClick={onBillOrder}

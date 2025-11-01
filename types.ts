@@ -26,7 +26,7 @@ export interface BilledItem {
   profit: number;
   date: string;
   timestamp: number;
-  status?: 'pending' | 'synced';
+  status?: 'hold' | 'synced';
 }
 
 export interface Expense {

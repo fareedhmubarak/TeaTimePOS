@@ -41,7 +41,7 @@ const Header: React.FC<HeaderProps> = ({
     const today = new Date();
     const todayDateString = today.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' });
     
-    const invoices: { [key: number]: { date: string; total: number; status?: 'pending' | 'synced'; timestamp: number; } } = {};
+    const invoices: { [key: number]: { date: string; total: number; status?: 'hold' | 'synced'; timestamp: number; } } = {};
     
     // Filter only today's bills
     billedItems
@@ -107,14 +107,14 @@ const Header: React.FC<HeaderProps> = ({
                           : 'text-gray-700 bg-gray-200 hover:bg-gray-300'
                       }`}
                     >
-                      <span>{`Pending ${holdNumber}`}</span>
+                      <span>{`Hold ${holdNumber}`}</span>
                       <span
                         onClick={(e) => {
                           e.stopPropagation();
                           onCloseHold(heldIndex);
                         }}
                         className={`p-0.5 rounded-full transition-colors duration-200 hover:bg-gray-400`}
-                        aria-label={`Close Pending ${holdNumber}`}
+                        aria-label={`Close Hold ${holdNumber}`}
                       >
                         <XIcon className="w-3.5 h-3.5" />
                       </span>
@@ -179,7 +179,7 @@ const Header: React.FC<HeaderProps> = ({
                         <li key={inv.invoiceNumber} className="px-4 py-3 border-b last:border-b-0 hover:bg-gray-50 cursor-pointer" onClick={() => { onNavigate('pos'); onViewInvoice(inv.invoiceNumber, inv.date, inv.timestamp); setShowRecent(false); }}>
                           <div className="flex justify-between items-center text-sm">
                             <span className="font-semibold text-gray-700 flex items-center">
-                                {inv.status === 'pending' && <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-purple-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>}
+                                {inv.status === 'hold' && <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-purple-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>}
                                 {inv.invoiceNumber > 0 ? `Invoice #${inv.invoiceNumber}` : 'Saving...'}
                             </span>
                             <span className="text-gray-500">{inv.date}</span>

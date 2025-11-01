@@ -1,7 +1,7 @@
 {
   "name": "Tea Time POS",
   "short_name": "Tea Time",
-  "description": "A Point of Sale (POS) system for a tea shop, featuring category-based item selection, a dynamic order cart, and the ability to manage multiple pending orders simultaneously using a tab-based interface.",
+  "description": "A Point of Sale (POS) system for a tea shop, featuring category-based item selection, a dynamic order cart, and the ability to manage multiple held orders simultaneously using a tab-based interface.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

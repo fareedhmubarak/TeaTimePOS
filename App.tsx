@@ -366,9 +366,9 @@ const App: React.FC = () => {
   };
 
   const handleHoldOrder = () => {
-    if (editingInvoiceNumber) { alert("Please update or clear the bill before setting to pending."); return; }
-    if (orders.length >= 6) { alert("Maximum of 5 orders can be pending."); return; }
-    if (activeOrder.items.length === 0) { alert("Cannot set an empty order to pending."); return; }
+    if (editingInvoiceNumber) { alert("Please update or clear the bill before setting to hold."); return; }
+    if (orders.length >= 6) { alert("Maximum of 5 orders can be held."); return; }
+    if (activeOrder.items.length === 0) { alert("Cannot set an empty order to hold."); return; }
     const newOrders = [...orders, { id: orderCounter++, items: [] }];
     setOrders(newOrders);
     setActiveOrderIndex(newOrders.length - 1);
@@ -515,7 +515,7 @@ const App: React.FC = () => {
       profit: item.product.profit * item.quantity,
       date: billDateString,
       timestamp: timestamp,
-      status: 'pending',
+      status: 'hold',
     }));
   
     setBilledItems(prev => [...newBilledItems, ...prev]);
@@ -589,7 +589,7 @@ const App: React.FC = () => {
       // 3. Sync Success: Update local state with real data - keep daily invoice number, add database ID
       setBilledItems(prev =>
         prev.map(item =>
-          item.invoiceNumber === dailyInvoiceNumber && item.status === 'pending'
+            item.invoiceNumber === dailyInvoiceNumber && item.status === 'hold'
             ? { ...item, invoiceDbId: newInvoiceId!, status: 'synced' }
             : item
         )
@@ -634,14 +634,14 @@ const App: React.FC = () => {
           await supabase.from('invoices').delete().eq('id', newInvoiceId);
       }
       
-      // Remove the temporary 'pending' items from the UI
-      setBilledItems(prev => prev.filter(item => !(item.invoiceNumber === dailyInvoiceNumber && item.status === 'pending')));
+      // Remove the temporary 'hold' items from the UI
+      setBilledItems(prev => prev.filter(item => !(item.invoiceNumber === dailyInvoiceNumber && item.status === 'hold')));
   
-      // Restore the failed order to a pending slot so it's not lost
+      // Restore the failed order to a held slot so it's not lost
       setOrders(prevOrders => {
         const lastOrder = prevOrders[prevOrders.length - 1];
         if (prevOrders.length >= 6) {
-          alert("Cannot add to pending because pending orders are full. Restoring order in the current tab instead.");
+          alert("Cannot add to hold because held orders are full. Restoring order in the current tab instead.");
           const restoredOrders = [...prevOrders];
           restoredOrders[prevOrders.length - 1].items = itemsToBill;
           return restoredOrders;
@@ -675,7 +675,7 @@ const App: React.FC = () => {
   };
   
   const handleEditInvoice = (invoiceNumber: number) => {
-    if (activeOrder.items.length > 0) { alert("Please bill or set your current active order to pending before editing."); return; }
+    if (activeOrder.items.length > 0) { alert("Please bill or set your current active order to hold before editing."); return; }
     const itemsForInvoice = billedItems.filter(item => item.invoiceNumber === invoiceNumber);
     if (itemsForInvoice.length === 0) { alert("Cannot edit an empty or invalid invoice."); return; }
     
