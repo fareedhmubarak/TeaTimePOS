@@ -17,7 +17,7 @@ const CategorySidebar: React.FC<CategorySidebarProps> = ({ categories, selectedC
             <li key={category} className="px-2">
               <button
                 onClick={() => onSelectCategory(category)}
-                className={`w-full text-left text-sm font-semibold p-3 my-1 rounded-md transition-colors duration-200 ${
+                className={`w-full text-left text-lg font-semibold p-4 my-1 rounded-md transition-colors duration-200 ${
                   selectedCategory === category
                     ? 'bg-white text-purple-900'
                     : 'hover:bg-purple-700'

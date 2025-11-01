@@ -25,10 +25,22 @@ self.addEventListener('install', event => {
     caches.open(CACHE_NAME)
       .then(cache => {
         console.log('Opened cache:', CACHE_NAME);
-        return cache.addAll(urlsToCache);
+        // Use addAll but don't fail if some files fail to cache
+        return Promise.allSettled(
+          urlsToCache.map(url => 
+            cache.add(url).catch(err => {
+              console.warn(`Failed to cache ${url}:`, err);
+              return null; // Continue even if individual files fail
+            })
+          )
+        ).then(() => {
+          console.log('Service Worker: Cache populated (some files may have failed)');
+        });
       })
       .catch(err => {
         console.error('Service Worker: Cache install failed', err);
+        // Don't prevent installation if cache fails
+        throw err;
       })
   );
 });
@@ -85,13 +97,18 @@ self.addEventListener('fetch', event => {
             return response;
           }
         ).catch(err => {
-            // This will happen if the network request fails (e.g., user is offline).
-            // Since the request wasn't in the cache, the fetch will fail.
-            // A more advanced implementation could return a custom offline page here.
-            console.error('Fetch failed; user may be offline:', err);
-            throw err;
+          // This will happen if the network request fails (e.g., user is offline).
+          // Since the request wasn't in the cache, the fetch will fail.
+          // A more advanced implementation could return a custom offline page here.
+          console.error('Fetch failed; user may be offline:', err);
+          throw err;
         });
-      }
+      })
+      .catch(err => {
+        // If cache match fails, fetch from network
+        console.error('Cache match failed, fetching from network:', err);
+        return fetch(event.request);
+      })
   );
 });
 

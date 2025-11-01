@@ -111,6 +111,7 @@ const ProductManagementPage: React.FC<ProductManagementPageProps> = ({ products,
                     onClose={closeModal}
                     onSave={handleSave}
                     productToEdit={editingProduct}
+                    products={products}
                 />
             )}
         </div>

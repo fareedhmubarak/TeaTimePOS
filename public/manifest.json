@@ -11,6 +11,7 @@
   "categories": ["business", "productivity"],
   "lang": "en",
   "dir": "ltr",
+  "prefer_related_applications": false,
   "icons": [
     {
       "src": "/icons/icon-192x192.png",

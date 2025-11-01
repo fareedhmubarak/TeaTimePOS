@@ -1,10 +1,10 @@
-import React, { useState, useMemo } from 'react';
-import CategorySidebar from './CategorySidebar.tsx';
-import ProductGrid from './ProductGrid.tsx';
-import OrderPanel from './OrderPanel.tsx';
-import { CATEGORIES } from '../constants.ts';
-import { Order, Product, CartItem, BilledItem } from '../types.ts';
-import { ShoppingCartIcon } from './Icons.tsx';
+import React, { useState, useMemo, useEffect } from "react";
+import CategorySidebar from "./CategorySidebar.tsx";
+import ProductGrid from "./ProductGrid.tsx";
+import OrderPanel from "./OrderPanel.tsx";
+import { CATEGORIES } from "../constants.ts";
+import { Order, Product, CartItem, BilledItem } from "../types.ts";
+import { ShoppingCartIcon } from "./Icons.tsx";
 
 interface POSViewProps {
   orders: Order[];
@@ -33,14 +33,58 @@ interface POSViewProps {
 }
 
 const POSView: React.FC<POSViewProps> = ({
-  orders, activeOrderIndex, activeOrder, products, billedItems, viewedInvoiceNumber, viewedOrder, invoiceCounter,
-  editingInvoiceNumber, billingDate, onBillingDateChange, onAddItem, onUpdateQuantity, onRemoveItem, onClearOrder, 
-  onSelectHold, onCloseHold, onHoldOrder, onBillOrder, onViewInvoice, onEditInvoice, onDeleteInvoice, onGoToNewOrder
+  orders,
+  activeOrderIndex,
+  activeOrder,
+  products,
+  billedItems,
+  viewedInvoiceNumber,
+  viewedOrder,
+  invoiceCounter,
+  editingInvoiceNumber,
+  billingDate,
+  onBillingDateChange,
+  onAddItem,
+  onUpdateQuantity,
+  onRemoveItem,
+  onClearOrder,
+  onSelectHold,
+  onCloseHold,
+  onHoldOrder,
+  onBillOrder,
+  onViewInvoice,
+  onEditInvoice,
+  onDeleteInvoice,
+  onGoToNewOrder,
 }) => {
-  const [selectedCategory, setSelectedCategory] = useState(CATEGORIES[0]);
-  const [searchTerm, setSearchTerm] = useState('');
+  // Get all unique categories from products + default categories
+  const allCategories = useMemo(() => {
+    const defaultCats = CATEGORIES;
+    const productCats = products
+      .map((p) => p.category)
+      .filter(
+        (cat, index, self) =>
+          cat && cat !== "FREQUENT" && self.indexOf(cat) === index
+      );
+    const uniqueCats = Array.from(
+      new Set([...defaultCats, ...productCats])
+    ).sort();
+    return uniqueCats;
+  }, [products]);
+
+  const [selectedCategory, setSelectedCategory] = useState(
+    allCategories[0] || CATEGORIES[0]
+  );
+  const [searchTerm, setSearchTerm] = useState("");
   const [isMobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [isMobileOrderOpen, setMobileOrderOpen] = useState(false);
+
+  // Update selected category if current one is removed or list changes
+  useEffect(() => {
+    if (!allCategories.includes(selectedCategory) && allCategories.length > 0) {
+      setSelectedCategory(allCategories[0]);
+    }
+  }, [allCategories, selectedCategory]);
 
   const handleSelectCategory = (category: string) => {
     setSelectedCategory(category);
@@ -48,31 +92,36 @@ const POSView: React.FC<POSViewProps> = ({
   };
 
   const filteredProducts = useMemo(() => {
-    const categoryProducts = products.filter(p => {
-        if (selectedCategory === 'FREQUENT') return p.category === 'FREQUENT';
-        return (p.category === selectedCategory || (p as any).originalCategory === selectedCategory);
+    const categoryProducts = products.filter((p) => {
+      if (selectedCategory === "FREQUENT") return p.category === "FREQUENT";
+      return (
+        p.category === selectedCategory ||
+        (p as any).originalCategory === selectedCategory
+      );
     });
-      
-    return categoryProducts.filter(product =>
+
+    return categoryProducts.filter((product) =>
       product.name.toLowerCase().includes(searchTerm.toLowerCase())
     );
   }, [selectedCategory, searchTerm, products]);
-  
+
   const isViewingHistory = viewedInvoiceNumber !== null;
   const displayOrder = isViewingHistory ? viewedOrder : activeOrder;
-  const displayInvoiceNumber = isViewingHistory ? viewedInvoiceNumber : (editingInvoiceNumber || invoiceCounter);
+  const displayInvoiceNumber = isViewingHistory
+    ? viewedInvoiceNumber
+    : editingInvoiceNumber || invoiceCounter;
   const isEditing = editingInvoiceNumber !== null;
 
   return (
     <div className="flex flex-1 overflow-hidden">
       {isMobileSidebarOpen && (
-        <div 
+        <div
           className="fixed inset-0 bg-black bg-opacity-50 z-20 md:hidden"
           onClick={() => setMobileSidebarOpen(false)}
         ></div>
       )}
       <CategorySidebar
-        categories={CATEGORIES}
+        categories={allCategories}
         selectedCategory={selectedCategory}
         onSelectCategory={handleSelectCategory}
         isOpen={isMobileSidebarOpen}
@@ -96,7 +145,7 @@ const POSView: React.FC<POSViewProps> = ({
           onClearOrder={onClearOrder}
           onBillOrder={onBillOrder}
           onHoldOrder={onHoldOrder}
-          canHold={orders.length < 6}
+          canHold={orders.length < 8}
           isReadOnly={isViewingHistory}
           isEditing={isEditing}
           onEditInvoice={() => onEditInvoice(displayInvoiceNumber!)}
@@ -107,15 +156,18 @@ const POSView: React.FC<POSViewProps> = ({
           onBillingDateChange={onBillingDateChange}
         />
         <div className="md:hidden fixed bottom-6 right-6 z-10">
-          <button 
+          <button
             onClick={() => setMobileOrderOpen(true)}
             className="bg-purple-800 text-white p-4 rounded-full shadow-lg flex items-center justify-center relative"
             aria-label="View current order"
           >
             <ShoppingCartIcon className="h-6 w-6" />
             {activeOrder.items.length > 0 && (
-              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center border-2 border-white">
-                {activeOrder.items.reduce((acc, item) => acc + item.quantity, 0)}
+              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-sm font-bold rounded-full h-6 w-6 flex items-center justify-center border-2 border-white">
+                {activeOrder.items.reduce(
+                  (acc, item) => acc + item.quantity,
+                  0
+                )}
               </span>
             )}
           </button>

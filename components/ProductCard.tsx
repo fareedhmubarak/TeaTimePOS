@@ -17,15 +17,15 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onAddItem, quantityI
         <img src={product.imageUrl} alt={product.name} className="w-full h-32 object-contain rounded-t-md p-2" />
       ) : (
         <div className="w-full h-32 bg-gray-200 flex items-center justify-center rounded-t-md">
-            <span className="text-gray-500 text-xs">No Image</span>
+            <span className="text-gray-500 text-base">No Image</span>
         </div>
       )}
       <div className="p-3 text-center">
-        <h3 className="text-sm font-bold truncate">{product.name}</h3>
-        <p className="text-xs text-gray-600 mt-1">₹{product.price}</p>
+        <h3 className="text-lg font-bold truncate">{product.name}</h3>
+        <p className="text-base text-gray-600 mt-1">₹{product.price}</p>
       </div>
       {quantityInCart > 0 && (
-          <div className="absolute top-1 right-1 bg-purple-800 text-white text-xs font-bold rounded-full h-6 w-6 flex items-center justify-center">
+          <div className="absolute top-1 right-1 bg-purple-800 text-white text-base font-bold rounded-full h-8 w-8 flex items-center justify-center">
               {quantityInCart}
           </div>
       )}

@@ -179,23 +179,27 @@ const App: React.FC = () => {
     fetchInitialData();
 
     const handleBeforeInstallPrompt = (e: Event) => {
-        console.log('PWA: Install prompt event received', e);
+        console.log('✅ PWA: Install prompt event received! Install button will appear in admin panel', e);
         e.preventDefault(); // Prevent the mini-infobar from appearing
         setInstallPromptEvent(e); // Stash the event so it can be triggered later.
     };
 
     // Check PWA installability
     const checkPWAInstallability = async () => {
+        console.log('🔍 Checking PWA installability...');
+        
         if ('serviceWorker' in navigator) {
             try {
                 const registration = await navigator.serviceWorker.getRegistration();
                 if (registration) {
-                    console.log('PWA: Service Worker registered', registration.scope);
+                    console.log('✅ PWA: Service Worker registered', registration.scope);
+                    console.log('✅ PWA: Service Worker active:', registration.active !== null);
+                    console.log('✅ PWA: Service Worker state:', registration.active?.state || 'N/A');
                 } else {
-                    console.warn('PWA: Service Worker not registered');
+                    console.warn('❌ PWA: Service Worker not registered');
                 }
             } catch (err) {
-                console.error('PWA: Service Worker check failed', err);
+                console.error('❌ PWA: Service Worker check failed', err);
             }
         }
 
@@ -204,19 +208,39 @@ const App: React.FC = () => {
             const response = await fetch('/manifest.json');
             if (response.ok) {
                 const manifest = await response.json();
-                console.log('PWA: Manifest loaded', manifest);
+                console.log('✅ PWA: Manifest loaded', manifest);
+                console.log('📋 Manifest icons:', manifest.icons?.length || 0);
+                console.log('📋 Manifest display:', manifest.display);
             } else {
-                console.error('PWA: Manifest not found');
+                console.error('❌ PWA: Manifest not found');
             }
         } catch (err) {
-            console.error('PWA: Manifest fetch failed', err);
+            console.error('❌ PWA: Manifest fetch failed', err);
+        }
+
+        // Check if app is already installed
+        const isStandalone = (window.navigator as any).standalone || window.matchMedia('(display-mode: standalone)').matches;
+        if (isStandalone) {
+            console.log('ℹ️ PWA: App is already installed (standalone mode detected)');
         }
     };
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     
-    // Check installability after a short delay to ensure SW is registered
+    // Check installability multiple times to catch the event
     setTimeout(checkPWAInstallability, 2000);
+    setTimeout(checkPWAInstallability, 5000);
+    setTimeout(checkPWAInstallability, 10000);
+    
+    // Also check when user interacts with the page (engagement requirement)
+    const checkOnInteraction = () => {
+        console.log('👆 User interaction detected - rechecking installability');
+        checkPWAInstallability();
+        document.removeEventListener('click', checkOnInteraction);
+        document.removeEventListener('keydown', checkOnInteraction);
+    };
+    document.addEventListener('click', checkOnInteraction, { once: true });
+    document.addEventListener('keydown', checkOnInteraction, { once: true });
 
     // Service Worker update detection
     if ('serviceWorker' in navigator) {
@@ -321,11 +345,33 @@ const App: React.FC = () => {
           (installPromptEvent as any).userChoice.then((choiceResult: { outcome: 'accepted' | 'dismissed' }) => {
               if (choiceResult.outcome === 'accepted') {
                   console.log('User accepted the install prompt');
+                  alert('App installation started! Please follow the prompts to complete installation.');
               } else {
                   console.log('User dismissed the install prompt');
               }
               setInstallPromptEvent(null); // We can only use the prompt once.
+          }).catch((err: any) => {
+              console.error('Install prompt error:', err);
+              alert('Installation failed. Please try manual installation or check browser settings.');
           });
+      } else {
+          // Fallback: Show instructions based on device
+          const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+          const isAndroid = /Android/.test(navigator.userAgent);
+          const isStandalone = (window.navigator as any).standalone || window.matchMedia('(display-mode: standalone)').matches;
+          
+          if (isStandalone) {
+              alert('App is already installed! You\'re using the installed version.');
+              return;
+          }
+          
+          if (isIOS) {
+              alert('To install on iOS:\n\n1. Tap the Share button (square with arrow up)\n2. Scroll down and tap "Add to Home Screen"\n3. Tap "Add" in the top right\n\nYou can then open the app from your home screen!');
+          } else if (isAndroid) {
+              alert('To install on Android:\n\n1. Tap the menu (3 dots) in your browser\n2. Look for "Install app" or "Add to Home screen"\n3. Tap it and confirm\n\nOr look for the install icon in your browser\'s address bar!');
+          } else {
+              alert('To install this app:\n\n1. Look for the install icon (➕) in your browser\'s address bar\n2. Or use browser menu:\n   - Chrome/Edge: Menu → "Install Tea Time POS"\n   - Firefox: Menu → "Install"\n\nMake sure you\'re using Chrome, Edge, or Opera for best PWA support.');
+          }
       }
   };
 
@@ -367,7 +413,7 @@ const App: React.FC = () => {
 
   const handleHoldOrder = () => {
     if (editingInvoiceNumber) { alert("Please update or clear the bill before setting to hold."); return; }
-    if (orders.length >= 6) { alert("Maximum of 5 orders can be held."); return; }
+    if (orders.length >= 8) { alert("Maximum of 7 orders can be held."); return; }
     if (activeOrder.items.length === 0) { alert("Cannot set an empty order to hold."); return; }
     const newOrders = [...orders, { id: orderCounter++, items: [] }];
     setOrders(newOrders);
@@ -640,7 +686,7 @@ const App: React.FC = () => {
       // Restore the failed order to a held slot so it's not lost
       setOrders(prevOrders => {
         const lastOrder = prevOrders[prevOrders.length - 1];
-        if (prevOrders.length >= 6) {
+        if (prevOrders.length >= 8) {
           alert("Cannot add to hold because held orders are full. Restoring order in the current tab instead.");
           const restoredOrders = [...prevOrders];
           restoredOrders[prevOrders.length - 1].items = itemsToBill;

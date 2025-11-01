@@ -44,14 +44,21 @@ const PasswordModal: React.FC<PasswordModalProps> = ({ isOpen, onClose, onSucces
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-[9999] flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+    <div 
+      className="fixed inset-0 bg-black bg-opacity-50 z-[9999] flex items-center justify-center p-4"
+      onClick={handleClose}
+    >
+      <div 
+        className="bg-white rounded-lg shadow-xl max-w-md w-full p-6 relative pointer-events-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-2xl font-bold text-gray-800">Admin Access</h2>
           <button
             onClick={handleClose}
             className="text-gray-500 hover:text-gray-700 transition-colors"
             aria-label="Close"
+            type="button"
           >
             <XIcon className="h-6 w-6" />
           </button>
@@ -73,11 +80,14 @@ const PasswordModal: React.FC<PasswordModalProps> = ({ isOpen, onClose, onSucces
                 setPassword(e.target.value);
                 setError('');
               }}
+              onFocus={(e) => e.target.select()}
               className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${
                 error ? 'border-red-500' : 'border-gray-300'
               }`}
               placeholder="Enter password"
               autoComplete="off"
+              autoFocus
+              style={{ pointerEvents: 'auto', zIndex: 10000 }}
             />
             {error && (
               <p className="mt-2 text-sm text-red-600">{error}</p>

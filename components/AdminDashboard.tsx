@@ -5,6 +5,7 @@ import StockManagementPage from './StockManagementPage.tsx';
 import ProductManagementPage from './ProductManagementPage.tsx';
 import ExpenseManagementPage from './ExpenseManagementPage.tsx';
 import DatabaseManagementPage from './DatabaseManagementPage.tsx';
+import PWADiagnostics from './PWADiagnostics.tsx';
 import { ChartBarIcon, DocumentTextIcon, TagIcon, ReceiptIcon, DatabaseIcon, ArrowDownTrayIcon } from './Icons.tsx';
 
 interface AdminDashboardProps {
@@ -114,19 +115,45 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     Database
                 </button>
                 </nav>
-                {installPromptEvent && onInstallClick && (
-                    <button
-                        onClick={onInstallClick}
-                        className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-green-700 transition-all transform hover:scale-105 active:scale-95"
-                        title="Install Tea Time POS App"
-                    >
-                        <ArrowDownTrayIcon className="w-5 h-5" />
-                        <span>Install App</span>
-                    </button>
-                )}
+                <div className="flex items-center gap-2">
+                    {installPromptEvent && onInstallClick ? (
+                        <button
+                            onClick={onInstallClick}
+                            className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-green-700 transition-all transform hover:scale-105 active:scale-95"
+                            title="Install Tea Time POS App"
+                        >
+                            <ArrowDownTrayIcon className="w-5 h-5" />
+                            <span>Install App</span>
+                        </button>
+                    ) : (
+                        <button
+                            onClick={() => {
+                                // Fallback: Show instructions
+                                const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+                                const isAndroid = /Android/.test(navigator.userAgent);
+                                if (isIOS) {
+                                    alert('To install on iOS:\n1. Tap the Share button (square with arrow)\n2. Tap "Add to Home Screen"\n3. Tap "Add"');
+                                } else if (isAndroid) {
+                                    alert('To install on Android:\n1. Tap the menu (3 dots)\n2. Tap "Install app" or "Add to Home screen"\n\nOr look for the install icon in your browser\'s address bar.');
+                                } else {
+                                    alert('To install this app:\n1. Look for the install icon in your browser\'s address bar\n2. Or use browser menu: Install App / Add to Home Screen\n\nMake sure you\'re using Chrome, Edge, or Safari for best PWA support.');
+                                }
+                            }}
+                            className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 transition-all transform hover:scale-105 active:scale-95"
+                            title="PWA Installation Instructions"
+                        >
+                            <ArrowDownTrayIcon className="w-5 h-5" />
+                            <span>Install App</span>
+                        </button>
+                    )}
+                </div>
             </div>
         </div>
         <div className="flex-1 p-4 sm:p-6 overflow-y-auto">
+            <PWADiagnostics 
+                installPromptEvent={installPromptEvent}
+                onInstallClick={onInstallClick}
+            />
             {renderView()}
         </div>
     </main>

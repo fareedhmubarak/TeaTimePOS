@@ -52,9 +52,9 @@ const OrderPanel: React.FC<OrderPanelProps> = ({
     return (
         <aside className={asideClasses}>
             <div className="p-4 border-b border-gray-200">
-                <h2 className="text-xl font-bold text-gray-800">Order Details</h2>
+                <h2 className="text-3xl font-bold text-gray-800">Order Details</h2>
             </div>
-            <div className="flex-1 flex items-center justify-center text-gray-500">
+            <div className="flex-1 flex items-center justify-center text-gray-500 text-lg">
                 Order not found.
             </div>
         </aside>
@@ -110,17 +110,17 @@ const OrderPanel: React.FC<OrderPanelProps> = ({
     <aside className={asideClasses}>
       <div className="p-4 border-b border-gray-200 space-y-3">
         <div className="flex justify-between items-start">
-          <h2 className="text-xl font-bold text-gray-800">
+          <h2 className="text-3xl font-bold text-gray-800">
               {isReadOnly ? 'Viewing Invoice' : (isEditing ? 'Editing Invoice' : 'Invoice')} #{isPending ? `${invoiceNumber * -1}`.slice(-4) : invoiceNumber}
-              {isPending && <span className="text-sm font-normal text-gray-500 ml-2">(Saving...)</span>}
+              {isPending && <span className="text-lg font-normal text-gray-500 ml-2">(Saving...)</span>}
           </h2>
           <div className="flex items-center space-x-2 flex-shrink-0">
             {isReadOnly && !isPending && isTodayInvoice && (
               <>
-                <button onClick={onEditInvoice} className="text-sm font-medium text-purple-600 hover:text-purple-800">
+                <button onClick={onEditInvoice} className="text-lg font-medium text-purple-600 hover:text-purple-800">
                   Edit
                 </button>
-                <button onClick={onDeleteInvoice} className="text-sm font-medium text-red-600 hover:text-red-800">
+                <button onClick={onDeleteInvoice} className="text-lg font-medium text-red-600 hover:text-red-800">
                   Delete
                 </button>
               </>
@@ -128,7 +128,7 @@ const OrderPanel: React.FC<OrderPanelProps> = ({
             {isReadOnly && !isPending && (
               <button 
                 onClick={handlePrint} 
-                className="text-sm font-medium text-blue-600 hover:text-blue-800 flex items-center space-x-1"
+                className="text-lg font-medium text-blue-600 hover:text-blue-800 flex items-center space-x-1"
                 title="Print Receipt"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -137,7 +137,7 @@ const OrderPanel: React.FC<OrderPanelProps> = ({
                 <span>Print</span>
               </button>
             )}
-            {!isReadOnly && <button onClick={onClearOrder} className="text-sm font-medium text-red-500 hover:text-red-700">Clear All</button>}
+            {!isReadOnly && <button onClick={onClearOrder} className="text-lg font-medium text-red-500 hover:text-red-700">Clear All</button>}
             <button onClick={onMobileClose} className="p-1 text-gray-500 hover:text-gray-800 md:hidden" aria-label="Close order panel">
                 <XIcon className="w-5 h-5" />
             </button>
@@ -145,7 +145,7 @@ const OrderPanel: React.FC<OrderPanelProps> = ({
         </div>
         
         <div>
-          <label htmlFor="billing-date" className="text-xs font-medium text-gray-600">Billing Date</label>
+          <label htmlFor="billing-date" className="text-base font-medium text-gray-600">Billing Date</label>
           <input
               type="date"
               id="billing-date"
@@ -156,7 +156,7 @@ const OrderPanel: React.FC<OrderPanelProps> = ({
                   onBillingDateChange(new Date(year, month - 1, day, 12, 0, 0));
               }}
               disabled={isReadOnly || isEditing}
-              className="block w-full bg-gray-50 border border-gray-300 rounded-md py-1 px-2 text-sm disabled:bg-gray-200 disabled:cursor-not-allowed"
+              className="block w-full bg-gray-50 border border-gray-300 rounded-md py-3 px-4 text-lg disabled:bg-gray-200 disabled:cursor-not-allowed"
           />
         </div>
       </div>
@@ -164,7 +164,7 @@ const OrderPanel: React.FC<OrderPanelProps> = ({
 
       <div className="flex-1 overflow-y-auto p-4">
         {order.items.length === 0 ? (
-          <div className="h-full flex items-center justify-center text-gray-500">
+          <div className="h-full flex items-center justify-center text-gray-500 text-lg">
             This order is empty
           </div>
         ) : (
@@ -185,8 +185,8 @@ const OrderPanel: React.FC<OrderPanelProps> = ({
       <div className="p-4 border-t border-gray-200 bg-gray-50">
         <div className="space-y-2 mb-4">
             <div className="flex justify-between items-center">
-              <span className="text-lg font-bold">Total Amount</span>
-              <span className="text-2xl font-bold text-purple-900">₹{totalAmount.toFixed(2)}</span>
+              <span className="text-2xl font-bold">Total Amount</span>
+              <span className="text-4xl font-bold text-purple-900">₹{totalAmount.toFixed(2)}</span>
             </div>
         </div>
 
@@ -195,13 +195,13 @@ const OrderPanel: React.FC<OrderPanelProps> = ({
                 <button
                     onClick={onHoldOrder}
                     disabled={!canHold || isEditing}
-                    className="w-1/2 py-3 bg-red-500 text-white rounded-md text-sm font-semibold hover:bg-red-600 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+                    className="w-1/2 py-5 bg-red-500 text-white rounded-md text-lg font-semibold hover:bg-red-600 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
                 >
                     {isEditing ? 'Update First' : (canHold ? 'Hold' : 'Hold Full')}
                 </button>
                 <button 
                     onClick={onBillOrder}
-                    className="w-1/2 py-3 bg-purple-800 text-white rounded-md text-sm font-semibold hover:bg-purple-900"
+                    className="w-1/2 py-5 bg-purple-800 text-white rounded-md text-lg font-semibold hover:bg-purple-900"
                 >
                     {isEditing ? 'Update Bill' : 'Bill'}
                 </button>
@@ -211,7 +211,7 @@ const OrderPanel: React.FC<OrderPanelProps> = ({
           <button
             onClick={handlePrint}
             disabled={isPrinting}
-            className="w-full py-3 bg-blue-600 text-white rounded-md text-sm font-semibold hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed flex items-center justify-center space-x-2 transition-colors"
+            className="w-full py-5 bg-blue-600 text-white rounded-md text-lg font-semibold hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed flex items-center justify-center space-x-2 transition-colors"
             title="Print Invoice"
           >
             {isPrinting ? (

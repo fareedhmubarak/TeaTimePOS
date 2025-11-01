@@ -23,7 +23,7 @@ const ProductGrid: React.FC<ProductGridProps> = ({ products, onAddItem, searchTe
           placeholder="Search Product"
           value={searchTerm}
           onChange={(e) => onSearchChange(e.target.value)}
-          className="block w-full bg-white border border-gray-300 rounded-md py-2 pl-10 pr-12 text-sm placeholder-gray-500 focus:outline-none focus:ring-purple-500 focus:border-purple-500"
+          className="block w-full bg-white border border-gray-300 rounded-md py-4 pl-10 pr-12 text-lg placeholder-gray-500 focus:outline-none focus:ring-purple-500 focus:border-purple-500"
         />
         <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
             <button className="p-1 text-gray-500 hover:text-purple-800">
