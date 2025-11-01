@@ -167,11 +167,44 @@ const App: React.FC = () => {
     fetchInitialData();
 
     const handleBeforeInstallPrompt = (e: Event) => {
+        console.log('PWA: Install prompt event received', e);
         e.preventDefault(); // Prevent the mini-infobar from appearing
         setInstallPromptEvent(e); // Stash the event so it can be triggered later.
     };
 
+    // Check PWA installability
+    const checkPWAInstallability = async () => {
+        if ('serviceWorker' in navigator) {
+            try {
+                const registration = await navigator.serviceWorker.getRegistration();
+                if (registration) {
+                    console.log('PWA: Service Worker registered', registration.scope);
+                } else {
+                    console.warn('PWA: Service Worker not registered');
+                }
+            } catch (err) {
+                console.error('PWA: Service Worker check failed', err);
+            }
+        }
+
+        // Check manifest
+        try {
+            const response = await fetch('/manifest.json');
+            if (response.ok) {
+                const manifest = await response.json();
+                console.log('PWA: Manifest loaded', manifest);
+            } else {
+                console.error('PWA: Manifest not found');
+            }
+        } catch (err) {
+            console.error('PWA: Manifest fetch failed', err);
+        }
+    };
+
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    
+    // Check installability after a short delay to ensure SW is registered
+    setTimeout(checkPWAInstallability, 2000);
 
     // Service Worker update detection
     if ('serviceWorker' in navigator) {
@@ -321,9 +354,9 @@ const App: React.FC = () => {
   };
 
   const handleHoldOrder = () => {
-    if (editingInvoiceNumber) { alert("Please update or clear the bill before holding."); return; }
-    if (orders.length >= 6) { alert("Maximum of 5 orders can be held."); return; }
-    if (activeOrder.items.length === 0) { alert("Cannot hold an empty order."); return; }
+    if (editingInvoiceNumber) { alert("Please update or clear the bill before setting to pending."); return; }
+    if (orders.length >= 6) { alert("Maximum of 5 orders can be pending."); return; }
+    if (activeOrder.items.length === 0) { alert("Cannot set an empty order to pending."); return; }
     const newOrders = [...orders, { id: orderCounter++, items: [] }];
     setOrders(newOrders);
     setActiveOrderIndex(newOrders.length - 1);
@@ -565,11 +598,11 @@ const App: React.FC = () => {
       // Remove the temporary 'pending' items from the UI
       setBilledItems(prev => prev.filter(item => !(item.invoiceNumber === dailyInvoiceNumber && item.status === 'pending')));
   
-      // Restore the failed order to a hold slot so it's not lost
+      // Restore the failed order to a pending slot so it's not lost
       setOrders(prevOrders => {
         const lastOrder = prevOrders[prevOrders.length - 1];
         if (prevOrders.length >= 6) {
-          alert("Cannot add to holds because they are full. Restoring order in the current tab instead.");
+          alert("Cannot add to pending because pending orders are full. Restoring order in the current tab instead.");
           const restoredOrders = [...prevOrders];
           restoredOrders[prevOrders.length - 1].items = itemsToBill;
           return restoredOrders;
@@ -603,7 +636,7 @@ const App: React.FC = () => {
   };
   
   const handleEditInvoice = (invoiceNumber: number) => {
-    if (activeOrder.items.length > 0) { alert("Please bill or hold your current active order before editing."); return; }
+    if (activeOrder.items.length > 0) { alert("Please bill or set your current active order to pending before editing."); return; }
     const itemsForInvoice = billedItems.filter(item => item.invoiceNumber === invoiceNumber);
     if (itemsForInvoice.length === 0) { alert("Cannot edit an empty or invalid invoice."); return; }
     
@@ -885,6 +918,8 @@ const App: React.FC = () => {
                 onAddExpenseItem={handleAddExpenseItem}
                 onUpdateExpenseItem={handleUpdateExpenseItem}
                 onDeleteExpenseItem={handleDeleteExpenseItem}
+                installPromptEvent={installPromptEvent}
+                onInstallClick={handleInstallClick}
             />
         );
       default:
@@ -986,7 +1021,7 @@ const App: React.FC = () => {
                     <title>Invoice #${orderPlacedInfo.invoiceNumber}</title>
                     <style>
                       @page {
-                        size: 80mm auto;
+                        size: 58mm auto;
                         margin: 0;
                         padding: 0;
                       }
@@ -998,9 +1033,9 @@ const App: React.FC = () => {
                         }
                         body { 
                           margin: 0;
-                          padding: 5mm 5mm 5mm 5mm;
-                          width: 80mm;
-                          font-size: 12px;
+                          padding: 2mm 3mm;
+                          width: 58mm;
+                          font-size: 10px;
                         }
                         html, body {
                           height: auto;
@@ -1009,85 +1044,86 @@ const App: React.FC = () => {
                       }
                       body {
                         font-family: Arial, sans-serif;
-                        width: 80mm;
+                        width: 58mm;
                         margin: 0;
-                        padding: 5mm;
+                        padding: 2mm 3mm;
                         color: #000;
-                        font-size: 12px;
+                        font-size: 10px;
                       }
                       .header {
                         text-align: center;
                         border-bottom: 1px solid #000;
-                        padding-bottom: 4mm;
-                        margin-bottom: 4mm;
+                        padding-bottom: 2mm;
+                        margin-bottom: 2mm;
                       }
                       .header h1 {
                         margin: 0;
-                        font-size: 18px;
+                        font-size: 14px;
                         font-weight: bold;
-                        line-height: 1.2;
+                        line-height: 1.1;
                       }
                       .header p {
-                        margin: 2px 0 0 0;
-                        font-size: 11px;
-                        line-height: 1.2;
+                        margin: 1px 0 0 0;
+                        font-size: 9px;
+                        line-height: 1.1;
                       }
                       .invoice-info {
-                        margin-bottom: 4mm;
-                        font-size: 10px;
-                        line-height: 1.4;
+                        margin-bottom: 2mm;
+                        font-size: 8px;
+                        line-height: 1.3;
                       }
                       .invoice-info div {
                         display: flex;
                         justify-content: space-between;
-                        margin-bottom: 2px;
+                        margin-bottom: 1px;
                       }
                       .items {
                         border-top: 1px dashed #000;
                         border-bottom: 1px dashed #000;
-                        padding: 3mm 0;
-                        margin: 4mm 0;
+                        padding: 2mm 0;
+                        margin: 2mm 0;
                       }
                       .item {
                         display: flex;
                         justify-content: space-between;
-                        margin-bottom: 3mm;
-                        font-size: 11px;
-                        line-height: 1.3;
+                        margin-bottom: 2mm;
+                        font-size: 9px;
+                        line-height: 1.2;
                         word-wrap: break-word;
                       }
                       .item-name {
                         flex: 1;
-                        margin-right: 3mm;
+                        margin-right: 2mm;
                       }
                       .item-qty {
-                        margin: 0 2mm;
+                        margin: 0 1mm;
                         white-space: nowrap;
+                        font-size: 8px;
                       }
                       .item-price {
                         text-align: right;
-                        min-width: 25mm;
+                        min-width: 18mm;
                         white-space: nowrap;
                       }
                       .total {
-                        margin-top: 4mm;
+                        margin-top: 2mm;
                         text-align: right;
                       }
                       .total-label {
-                        font-size: 12px;
+                        font-size: 10px;
                         font-weight: bold;
-                        margin-bottom: 2px;
+                        margin-bottom: 1px;
                       }
                       .total-amount {
-                        font-size: 16px;
+                        font-size: 14px;
                         font-weight: bold;
                       }
                       .footer {
-                        margin-top: 4mm;
+                        margin-top: 2mm;
                         text-align: center;
-                        font-size: 10px;
+                        font-size: 8px;
                         border-top: 1px dashed #000;
-                        padding-top: 3mm;
+                        padding-top: 2mm;
                       }
                       @media print {
                         .no-print { display: none; }

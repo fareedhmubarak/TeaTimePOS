@@ -107,14 +107,14 @@ const Header: React.FC<HeaderProps> = ({
                           : 'text-gray-700 bg-gray-200 hover:bg-gray-300'
                       }`}
                     >
-                      <span>{`Hold ${holdNumber}`}</span>
+                      <span>{`Pending ${holdNumber}`}</span>
                       <span
                         onClick={(e) => {
                           e.stopPropagation();
                           onCloseHold(heldIndex);
                         }}
                         className={`p-0.5 rounded-full transition-colors duration-200 hover:bg-gray-400`}
-                        aria-label={`Close Hold ${holdNumber}`}
+                        aria-label={`Close Pending ${holdNumber}`}
                       >
                         <XIcon className="w-3.5 h-3.5" />
                       </span>

@@ -87,7 +87,7 @@ const OrderPanel: React.FC<OrderPanelProps> = ({
           <title>Invoice #${invoiceNumber}</title>
           <style>
             @page {
-              size: 80mm auto;
+              size: 58mm auto;
               margin: 0;
               padding: 0;
             }
@@ -99,9 +99,9 @@ const OrderPanel: React.FC<OrderPanelProps> = ({
               }
               body { 
                 margin: 0;
-                padding: 5mm 5mm 5mm 5mm;
-                width: 80mm;
-                font-size: 12px;
+                padding: 2mm 3mm;
+                width: 58mm;
+                font-size: 10px;
               }
               html, body {
                 height: auto;
@@ -110,85 +110,86 @@ const OrderPanel: React.FC<OrderPanelProps> = ({
             }
             body {
               font-family: Arial, sans-serif;
-              width: 80mm;
+              width: 58mm;
               margin: 0;
-              padding: 5mm;
+              padding: 2mm 3mm;
               color: #000;
-              font-size: 12px;
+              font-size: 10px;
             }
             .header {
               text-align: center;
               border-bottom: 1px solid #000;
-              padding-bottom: 4mm;
-              margin-bottom: 4mm;
+              padding-bottom: 2mm;
+              margin-bottom: 2mm;
             }
             .header h1 {
               margin: 0;
-              font-size: 18px;
+              font-size: 14px;
               font-weight: bold;
-              line-height: 1.2;
+              line-height: 1.1;
             }
             .header p {
-              margin: 2px 0 0 0;
-              font-size: 11px;
-              line-height: 1.2;
+              margin: 1px 0 0 0;
+              font-size: 9px;
+              line-height: 1.1;
             }
             .invoice-info {
-              margin-bottom: 4mm;
-              font-size: 10px;
-              line-height: 1.4;
+              margin-bottom: 2mm;
+              font-size: 8px;
+              line-height: 1.3;
             }
             .invoice-info div {
               display: flex;
               justify-content: space-between;
-              margin-bottom: 2px;
+              margin-bottom: 1px;
             }
             .items {
               border-top: 1px dashed #000;
               border-bottom: 1px dashed #000;
-              padding: 3mm 0;
-              margin: 4mm 0;
+              padding: 2mm 0;
+              margin: 2mm 0;
             }
             .item {
               display: flex;
               justify-content: space-between;
-              margin-bottom: 3mm;
-              font-size: 11px;
-              line-height: 1.3;
+              margin-bottom: 2mm;
+              font-size: 9px;
+              line-height: 1.2;
               word-wrap: break-word;
             }
             .item-name {
               flex: 1;
-              margin-right: 3mm;
+              margin-right: 2mm;
             }
             .item-qty {
-              margin: 0 2mm;
+              margin: 0 1mm;
               white-space: nowrap;
+              font-size: 8px;
             }
             .item-price {
               text-align: right;
-              min-width: 25mm;
+              min-width: 18mm;
               white-space: nowrap;
             }
             .total {
-              margin-top: 4mm;
+              margin-top: 2mm;
               text-align: right;
             }
             .total-label {
-              font-size: 12px;
+              font-size: 10px;
               font-weight: bold;
-              margin-bottom: 2px;
+              margin-bottom: 1px;
             }
             .total-amount {
-              font-size: 16px;
+              font-size: 14px;
               font-weight: bold;
             }
             .footer {
-              margin-top: 4mm;
+              margin-top: 2mm;
               text-align: center;
-              font-size: 10px;
+              font-size: 8px;
               border-top: 1px dashed #000;
-              padding-top: 3mm;
+              padding-top: 2mm;
             }
             @media print {
               .no-print { display: none; }
@@ -328,7 +329,7 @@ const OrderPanel: React.FC<OrderPanelProps> = ({
                     disabled={!canHold || isEditing}
                     className="w-1/2 py-3 bg-red-500 text-white rounded-md text-sm font-semibold hover:bg-red-600 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
                 >
-                    {isEditing ? 'Update First' : (canHold ? 'Hold' : 'Holds Full')}
+                    {isEditing ? 'Update First' : (canHold ? 'Pending' : 'Pending Full')}
                 </button>
                 <button 
                     onClick={onBillOrder}

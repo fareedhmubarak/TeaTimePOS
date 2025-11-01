@@ -5,7 +5,7 @@ import StockManagementPage from './StockManagementPage.tsx';
 import ProductManagementPage from './ProductManagementPage.tsx';
 import ExpenseManagementPage from './ExpenseManagementPage.tsx';
 import DatabaseManagementPage from './DatabaseManagementPage.tsx';
-import { ChartBarIcon, DocumentTextIcon, TagIcon, ReceiptIcon, DatabaseIcon } from './Icons.tsx';
+import { ChartBarIcon, DocumentTextIcon, TagIcon, ReceiptIcon, DatabaseIcon, ArrowDownTrayIcon } from './Icons.tsx';
 
 interface AdminDashboardProps {
   billedItems: BilledItem[];
@@ -24,6 +24,8 @@ interface AdminDashboardProps {
   onDeleteExpenseItem: (itemId: number) => void;
   onNavigate?: (view: 'home' | 'pos' | 'admin') => void;
   onViewInvoice?: (invoiceNumber: number) => void;
+  installPromptEvent?: Event | null;
+  onInstallClick?: () => void;
 }
 
 type AdminTab = 'reports' | 'expenses' | 'items' | 'expenseItems' | 'database';
@@ -34,6 +36,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onAddProduct, onUpdateProduct, onDeleteProduct,
   onAddExpenseItem, onUpdateExpenseItem, onDeleteExpenseItem,
   onNavigate, onViewInvoice,
+  installPromptEvent, onInstallClick,
 }) => {
   const [activeTab, setActiveTab] = useState<AdminTab>('reports');
 
@@ -73,7 +76,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   return (
     <main className="flex-1 flex flex-col bg-gray-50">
         <div className="border-b border-gray-200 bg-white">
-            <nav className=" -mb-px flex space-x-8 px-6" aria-label="Tabs">
+            <div className="flex items-center justify-between px-6 py-2">
+                <nav className="-mb-px flex space-x-8" aria-label="Tabs">
                 <button
                     onClick={() => setActiveTab('reports')}
                     className={`flex items-center whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'reports' ? 'border-purple-500 text-purple-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
@@ -109,7 +113,18 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <DatabaseIcon className="w-5 h-5 mr-2" />
                     Database
                 </button>
-            </nav>
+                </nav>
+                {installPromptEvent && onInstallClick && (
+                    <button
+                        onClick={onInstallClick}
+                        className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-green-700 transition-all transform hover:scale-105 active:scale-95"
+                        title="Install Tea Time POS App"
+                    >
+                        <ArrowDownTrayIcon className="w-5 h-5" />
+                        <span>Install App</span>
+                    </button>
+                )}
+            </div>
         </div>
         <div className="flex-1 p-4 sm:p-6 overflow-y-auto">
             {renderView()}

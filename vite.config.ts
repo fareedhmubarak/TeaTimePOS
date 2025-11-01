@@ -12,6 +12,21 @@ export default defineConfig(({ mode }) => {
         alias: {
           '@': path.resolve(__dirname, '.'),
         }
+      },
+      // Ensure manifest and icons are served correctly
+      publicDir: 'public',
+      build: {
+        rollupOptions: {
+          output: {
+            // Ensure manifest is copied correctly
+            assetFileNames: (assetInfo) => {
+              if (assetInfo.name === 'manifest.json') {
+                return 'manifest.json';
+              }
+              return 'assets/[name]-[hash][extname]';
+            }
+          }
+        }
       }
     };
 });
