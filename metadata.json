@@ -1,0 +1,7 @@
+{
+  "name": "Tea Time POS",
+  "description": "A Point of Sale (POS) system for a tea shop, featuring category-based item selection, a dynamic order cart, and the ability to manage multiple orders on hold simultaneously using a tab-based interface.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}

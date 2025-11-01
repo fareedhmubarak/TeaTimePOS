@@ -1,0 +1,25 @@
+{
+  "name": "Tea Time POS",
+  "short_name": "Tea Time",
+  "description": "A Point of Sale (POS) system for a tea shop, featuring category-based item selection, a dynamic order cart, and the ability to manage multiple orders on hold simultaneously using a tab-based interface.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#6b21a8",
+  "icons": [
+    {
+      "src": "/icons/icon-192x192.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512x512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ]
+}

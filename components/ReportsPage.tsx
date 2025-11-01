@@ -1,0 +1,122 @@
+import React, { useState, useMemo } from 'react';
+import { BilledItem, Expense, StockEntry, ExpenseItem } from '../types.ts';
+import ReportView from './ReportView.tsx';
+import { CalendarIcon } from './Icons.tsx';
+
+interface ReportsPageProps {
+  billedItems: BilledItem[];
+  expenses: Expense[];
+  stockEntries: StockEntry[];
+  expenseItems: ExpenseItem[];
+}
+
+type ReportType = 'daily' | 'monthly' | 'range';
+
+const toInputDate = (date: Date): string => {
+    return date.toISOString().split('T')[0];
+};
+
+const toReportDate = (date: Date): string => {
+    return date.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' });
+};
+
+const ReportsPage: React.FC<ReportsPageProps> = ({ billedItems, expenses, stockEntries, expenseItems }) => {
+    const [reportType, setReportType] = useState<ReportType>('daily');
+    const today = new Date();
+    const [selectedDate, setSelectedDate] = useState(toInputDate(today));
+    
+    // For range picker
+    const [startDate, setStartDate] = useState(toInputDate(new Date(today.getFullYear(), today.getMonth(), 1)));
+    const [endDate, setEndDate] = useState(toInputDate(today));
+
+    const { finalStartDate, finalEndDate, title } = useMemo(() => {
+        switch (reportType) {
+            case 'daily': {
+                const date = new Date(selectedDate + 'T00:00:00'); // Treat as local date
+                const reportDate = toReportDate(date);
+                return { 
+                    finalStartDate: reportDate, 
+                    finalEndDate: reportDate,
+                    title: date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+                };
+            }
+            case 'monthly': {
+                 // The date picker for daily view sets the context for monthly
+                const refDate = new Date(selectedDate + 'T00:00:00');
+                const firstDay = new Date(refDate.getFullYear(), refDate.getMonth(), 1);
+                const lastDay = new Date(refDate.getFullYear(), refDate.getMonth() + 1, 0);
+                 return { 
+                    finalStartDate: toReportDate(firstDay), 
+                    finalEndDate: toReportDate(lastDay),
+                    title: firstDay.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+                };
+            }
+            case 'range': {
+                const start = new Date(startDate + 'T00:00:00');
+                const end = new Date(endDate + 'T00:00:00');
+                 return { 
+                    finalStartDate: toReportDate(start), 
+                    finalEndDate: toReportDate(end),
+                    title: `${start.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric'})} - ${end.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric'})}`
+                };
+            }
+            default:
+                return { finalStartDate: '', finalEndDate: '', title: '' };
+        }
+    }, [reportType, selectedDate, startDate, endDate]);
+
+    const renderDateSelectors = () => {
+        if (reportType === 'range') {
+             return (
+                <div className="flex items-center space-x-2 text-sm">
+                    <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="p-1 border bg-gray-50 rounded-md" />
+                    <span className="text-gray-600">to</span>
+                    <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="p-1 border bg-gray-50 rounded-md" />
+                </div>
+            );
+        }
+        
+        // Daily and Monthly both use the single date picker
+        return (
+            <div className="flex items-center space-x-2 text-sm text-gray-700 font-medium">
+                <span>Date:</span>
+                <div className="relative">
+                    <input 
+                        type="date" 
+                        value={selectedDate} 
+                        onChange={e => setSelectedDate(e.target.value)} 
+                        className="p-1 pl-2 pr-8 border bg-gray-50 rounded-md" 
+                    />
+                    <CalendarIcon className="w-4 h-4 absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+                </div>
+            </div>
+        );
+    };
+    
+    return (
+        <div className="space-y-6">
+            <div className="bg-white p-3 rounded-lg shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-3 sm:space-y-0">
+                <div className="flex items-center border border-gray-200 rounded-lg p-1 space-x-1">
+                    <button onClick={() => setReportType('daily')} className={`px-4 py-1.5 text-sm font-bold rounded-md transition-colors ${reportType === 'daily' ? 'bg-purple-600 text-white shadow' : 'text-gray-600 hover:bg-gray-100'}`}>Daily</button>
+                    <button onClick={() => setReportType('monthly')} className={`px-4 py-1.5 text-sm font-bold rounded-md transition-colors ${reportType === 'monthly' ? 'bg-purple-600 text-white shadow' : 'text-gray-600 hover:bg-gray-100'}`}>Monthly</button>
+                    <button onClick={() => setReportType('range')} className={`px-4 py-1.5 text-sm font-bold rounded-md transition-colors ${reportType === 'range' ? 'bg-purple-600 text-white shadow' : 'text-gray-600 hover:bg-gray-100'}`}>Date Range</button>
+                </div>
+                <div>
+                    {renderDateSelectors()}
+                </div>
+            </div>
+
+            <ReportView 
+                billedItems={billedItems} 
+                expenses={expenses}
+                stockEntries={stockEntries}
+                expenseItems={expenseItems}
+                startDate={finalStartDate}
+                endDate={finalEndDate}
+                title={title}
+            />
+        </div>
+    );
+};
+
+export default ReportsPage;
