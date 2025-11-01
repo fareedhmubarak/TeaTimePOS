@@ -1,6 +1,6 @@
 // Version number - Update this when you push new code to trigger auto-updates
 // Change this version number whenever you deploy new code to trigger automatic updates
-const APP_VERSION = '1.0.1';
+const APP_VERSION = '1.0.2';
 const CACHE_NAME = `tea-time-pos-cache-v${APP_VERSION}`;
 // Add the main application shell files to the cache list.
 // The service worker will automatically cache other requests (like to the CDN) as they are made.

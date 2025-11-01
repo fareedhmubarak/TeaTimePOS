@@ -9,6 +9,7 @@ import OrderPlacedModal from './components/OrderPlacedModal.tsx';
 import UpdateNotification from './components/UpdateNotification.tsx';
 import { supabase } from './supabaseClient.ts';
 import { Order, Product, CartItem, BilledItem, Expense, StockEntry, ExpenseItem } from './types.ts';
+import { printReceipt, PrintData } from './utils/printer.ts';
 
 let orderCounter = 1;
 
@@ -87,7 +88,18 @@ const App: React.FC = () => {
   const [isExpenseModalOpen, setExpenseModalOpen] = useState(false);
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
-  const [orderPlacedInfo, setOrderPlacedInfo] = useState<{ invoiceNumber: number; totalAmount: number } | null>(null);
+  const [orderPlacedInfo, setOrderPlacedInfo] = useState<{ invoiceNumber: number; totalAmount: number; items: Array<{ name: string; quantity: number; price: number }> } | null>(null);
+  
+  // Debug: Log when orderPlacedInfo changes
+  useEffect(() => {
+    console.log('=== orderPlacedInfo STATE CHANGED ===');
+    console.log('Current value:', orderPlacedInfo);
+    console.log('Is truthy?', !!orderPlacedInfo);
+    if (orderPlacedInfo) {
+      console.log('Invoice #:', orderPlacedInfo.invoiceNumber);
+      console.log('Items count:', orderPlacedInfo.items?.length || 0);
+    }
+  }, [orderPlacedInfo]);
   
   // App State
   const [loading, setLoading] = useState(true);
@@ -484,7 +496,11 @@ const App: React.FC = () => {
       return;
     }
   
-    const itemsToBill = [...activeOrder.items];
+    // Clear any previous order placed info to prevent stale data
+    setOrderPlacedInfo(null);
+  
+    // Create a fresh copy of items to bill
+    const itemsToBill = activeOrder.items.map(item => ({ ...item, product: { ...item.product } }));
     const dailyInvoiceNumber = nextInvoiceNumber; // Use the calculated daily invoice number
     const billDateString = billingDate.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' });
     // This combines the user-selected date with the current time for the timestamp.
@@ -579,9 +595,32 @@ const App: React.FC = () => {
         )
       );
       
-      // 4. Show order placed modal
+      // 4. Show order placed modal - DO THIS BEFORE ANY OTHER OPERATIONS
       const totalAmount = itemsToBill.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
-      setOrderPlacedInfo({ invoiceNumber: dailyInvoiceNumber, totalAmount });
+      // Create a fresh array copy to avoid any reference issues
+      const itemsForPrint = itemsToBill.map(item => ({
+        name: String(item.product.name || ''),
+        quantity: Number(item.quantity || 0),
+        price: Number((item.product.price * item.quantity).toFixed(2))
+      }));
+      
+      console.log('=== NEW ORDER PLACED ===');
+      console.log('Invoice Number:', dailyInvoiceNumber);
+      console.log('Items to print:', itemsForPrint);
+      console.log('Items count:', itemsForPrint.length);
+      console.log('Total Amount:', totalAmount);
+      console.log('Setting orderPlacedInfo state...');
+      
+      // Use regular state update (not functional) to ensure React sees the change
+      const orderInfo = { 
+        invoiceNumber: dailyInvoiceNumber, 
+        totalAmount: Number(totalAmount.toFixed(2)),
+        items: [...itemsForPrint] // Create a new array copy
+      };
+      
+      console.log('Order info to set:', orderInfo);
+      setOrderPlacedInfo(orderInfo);
+      console.log('orderPlacedInfo state set. Modal should appear now.');
     } catch (err: any) {
       // 4. Sync Failure: Rollback and Revert UI
       console.error("Optimistic billing failed:", err);
@@ -993,183 +1032,111 @@ const App: React.FC = () => {
         <OrderPlacedModal
           isOpen={!!orderPlacedInfo}
           onClose={() => setOrderPlacedInfo(null)}
-          onPrint={() => {
-            // Find the invoice items and print
-            const invoiceItems = billedItems.filter(item => item.invoiceNumber === orderPlacedInfo.invoiceNumber);
-            if (invoiceItems.length > 0) {
-              // Create print window
-              const printWindow = window.open('', '_blank');
-              if (!printWindow) {
-                alert('Please allow pop-ups to print receipts');
-                return;
-              }
-
-              const dateStr = new Date(invoiceItems[0].timestamp).toLocaleDateString('en-US', { 
-                year: 'numeric', 
-                month: 'long', 
-                day: 'numeric'
-              });
-              const timeStr = new Date(invoiceItems[0].timestamp).toLocaleTimeString('en-US', {
-                hour: '2-digit',
-                minute: '2-digit'
-              });
-
-              printWindow.document.write(`
-                <!DOCTYPE html>
-                <html>
-                  <head>
-                    <title>Invoice #${orderPlacedInfo.invoiceNumber}</title>
-                    <style>
-                      @page {
-                        size: 58mm auto;
-                        margin: 0;
-                        padding: 0;
-                      }
-                      @media print {
-                        * {
-                          margin: 0;
-                          padding: 0;
-                          box-sizing: border-box;
-                        }
-                        body { 
-                          margin: 0;
-                          padding: 2mm 3mm;
-                          width: 58mm;
-                          font-size: 10px;
-                        }
-                        html, body {
-                          height: auto;
-                          overflow: visible;
-                        }
-                      }
-                      body {
-                        font-family: Arial, sans-serif;
-                        width: 58mm;
-                        margin: 0;
-                        padding: 2mm 3mm;
-                        color: #000;
-                        font-size: 10px;
-                      }
-                      .header {
-                        text-align: center;
-                        border-bottom: 1px solid #000;
-                        padding-bottom: 2mm;
-                        margin-bottom: 2mm;
-                      }
-                      .header h1 {
-                        margin: 0;
-                        font-size: 14px;
-                        font-weight: bold;
-                        line-height: 1.1;
-                      }
-                      .header p {
-                        margin: 1px 0 0 0;
-                        font-size: 9px;
-                        line-height: 1.1;
-                      }
-                      .invoice-info {
-                        margin-bottom: 2mm;
-                        font-size: 8px;
-                        line-height: 1.3;
-                      }
-                      .invoice-info div {
-                        display: flex;
-                        justify-content: space-between;
-                        margin-bottom: 1px;
-                      }
-                      .items {
-                        border-top: 1px dashed #000;
-                        border-bottom: 1px dashed #000;
-                        padding: 2mm 0;
-                        margin: 2mm 0;
-                      }
-                      .item {
-                        display: flex;
-                        justify-content: space-between;
-                        margin-bottom: 2mm;
-                        font-size: 9px;
-                        line-height: 1.2;
-                        word-wrap: break-word;
-                      }
-                      .item-name {
-                        flex: 1;
-                        margin-right: 2mm;
-                      }
-                      .item-qty {
-                        margin: 0 1mm;
-                        white-space: nowrap;
-                        font-size: 8px;
-                      }
-                      .item-price {
-                        text-align: right;
-                        min-width: 18mm;
-                        white-space: nowrap;
-                      }
-                      .total {
-                        margin-top: 2mm;
-                        text-align: right;
-                      }
-                      .total-label {
-                        font-size: 10px;
-                        font-weight: bold;
-                        margin-bottom: 1px;
-                      }
-                      .total-amount {
-                        font-size: 14px;
-                        font-weight: bold;
-                      }
-                      .footer {
-                        margin-top: 2mm;
-                        text-align: center;
-                        font-size: 8px;
-                        border-top: 1px dashed #000;
-                        padding-top: 2mm;
-                      }
-                      @media print {
-                        .no-print { display: none; }
-                      }
-                    </style>
-                  </head>
-                  <body>
-                    <div class="header">
-                      <h1>Tea Time</h1>
-                      <p>Point of Sale</p>
-                    </div>
-                    <div class="invoice-info">
-                      <div>
-                        <span>Invoice #:</span>
-                        <span>${orderPlacedInfo.invoiceNumber}</span>
-                      </div>
-                      <div>
-                        <span>Date:</span>
-                        <span>${dateStr} ${timeStr}</span>
-                      </div>
-                    </div>
-                    <div class="items">
-                      ${invoiceItems.map(item => `
-                        <div class="item">
-                          <span class="item-name">${item.productName}</span>
-                          <span class="item-qty">Qty: ${item.quantity}</span>
-                          <span class="item-price">₹${item.price.toFixed(2)}</span>
-                        </div>
-                      `).join('')}
-                    </div>
-                    <div class="total">
-                      <div class="total-label">Total Amount</div>
-                      <div class="total-amount">₹${orderPlacedInfo.totalAmount.toFixed(2)}</div>
-                    </div>
-                    <div class="footer">
-                      <p>Thank you for your visit!</p>
-                    </div>
-                  </body>
-                </html>
-              `);
+          onPrint={async () => {
+            console.log('=== PRINT DEBUG START ===');
+            console.log('Printing invoice #', orderPlacedInfo.invoiceNumber);
+            console.log('OrderPlacedInfo:', JSON.parse(JSON.stringify(orderPlacedInfo))); // Deep copy for logging
+            
+            // ALWAYS use items directly from orderPlacedInfo - create a fresh copy
+            let itemsToPrint: Array<{ name: string; quantity: number; price: number }> = [];
+            
+            if (orderPlacedInfo.items && Array.isArray(orderPlacedInfo.items) && orderPlacedInfo.items.length > 0) {
+              // Create a fresh copy of items to avoid any mutation issues
+              itemsToPrint = orderPlacedInfo.items.map(item => ({
+                name: String(item.name || ''),
+                quantity: Number(item.quantity || 0),
+                price: Number(item.price || 0)
+              }));
               
-              printWindow.document.close();
-              setTimeout(() => {
-                printWindow.print();
-                printWindow.close();
-              }, 250);
+              // Validate items belong to this invoice by checking count matches
+              console.log('Using items from orderPlacedInfo');
+              console.log('Items count from orderPlacedInfo:', itemsToPrint.length);
+            } else {
+              // Fallback: Try to find items from billedItems if not in orderPlacedInfo
+              console.warn('No items in orderPlacedInfo, trying billedItems filter...');
+              const invoiceItems = billedItems.filter(item => 
+                item.invoiceNumber === orderPlacedInfo.invoiceNumber
+              );
+              console.log('Found invoice items from billedItems:', invoiceItems);
+              console.log('Invoice items count from billedItems:', invoiceItems.length);
+              
+              if (invoiceItems.length > 0) {
+                itemsToPrint = invoiceItems.map(item => ({
+                  name: String(item.productName || ''),
+                  quantity: Number(item.quantity || 0),
+                  price: Number(item.price || 0)
+                }));
+              }
+            }
+            
+            // Final validation - ensure we have items and they match the invoice
+            console.log('=== ITEM VALIDATION ===');
+            console.log('Invoice Number:', orderPlacedInfo.invoiceNumber);
+            console.log('Final items to print:', itemsToPrint);
+            console.log('Final items count:', itemsToPrint.length);
+            
+            // Verify items array is clean and doesn't contain duplicates
+            const itemNames = itemsToPrint.map(i => i.name);
+            const uniqueNames = new Set(itemNames);
+            if (itemNames.length !== uniqueNames.size) {
+              console.warn('WARNING: Duplicate items detected!', itemNames);
+              // Remove duplicates, keeping first occurrence
+              const seen = new Set<string>();
+              itemsToPrint = itemsToPrint.filter(item => {
+                if (seen.has(item.name)) {
+                  return false;
+                }
+                seen.add(item.name);
+                return true;
+              });
+              console.log('After deduplication:', itemsToPrint);
+            }
+            
+            if (itemsToPrint.length > 0) {
+              try {
+                // Get date from current billing date or first billed item
+                const firstBilledItem = billedItems.find(item => item.invoiceNumber === orderPlacedInfo.invoiceNumber);
+                const timestamp = firstBilledItem?.timestamp || Date.now();
+                
+                const dateStr = new Date(timestamp).toLocaleDateString('en-US', { 
+                  year: 'numeric', 
+                  month: 'long', 
+                  day: 'numeric'
+                });
+                const timeStr = new Date(timestamp).toLocaleTimeString('en-US', {
+                  hour: '2-digit',
+                  minute: '2-digit'
+                });
+
+                const printData: PrintData = {
+                  invoiceNumber: orderPlacedInfo.invoiceNumber,
+                  date: dateStr,
+                  time: timeStr,
+                  items: itemsToPrint,
+                  totalAmount: orderPlacedInfo.totalAmount
+                };
+
+                console.log('=== PRINT DATA ===');
+                console.log('Print data invoice #:', printData.invoiceNumber);
+                console.log('Print data items count:', printData.items.length);
+                console.log('Print data items:', printData.items);
+                console.log('Print data total:', printData.totalAmount);
+                console.log('=== SENDING TO PRINTER ===');
+
+                // Try direct printing first (will show printer selection if Web Serial API is available)
+                await printReceipt(printData, true);
+                
+                console.log('=== PRINT COMPLETE ===');
+              } catch (error: any) {
+                console.error('=== PRINT ERROR ===', error);
+                alert(error.message || 'Failed to print. Please try again.');
+              }
+            } else {
+              console.error('=== NO ITEMS TO PRINT ===');
+              console.error('No items found for invoice #', orderPlacedInfo.invoiceNumber);
+              console.error('BilledItems length:', billedItems.length);
+              console.error('BilledItems sample:', billedItems.slice(0, 3));
+              alert('No items found for this invoice. Please try again.');
             }
             setOrderPlacedInfo(null);
           }}

@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Order } from '../types.ts';
 import OrderItem from './OrderItem.tsx';
 import { XIcon } from './Icons.tsx';
+import { printReceipt, PrintData } from '../utils/printer.ts';
 
 interface OrderPanelProps {
   order: Order | null;
@@ -61,181 +62,48 @@ const OrderPanel: React.FC<OrderPanelProps> = ({
   }
     
   const totalAmount = order.items.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
+  const [isPrinting, setIsPrinting] = useState(false);
 
-  const handlePrint = () => {
-    
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-      alert('Please allow pop-ups to print receipts');
-      return;
+  const handlePrint = async () => {
+    setIsPrinting(true);
+    try {
+      const dateStr = billingDate.toLocaleDateString('en-US', { 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric'
+      });
+      const timeStr = new Date().toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+
+      console.log('Printing invoice #', invoiceNumber);
+      console.log('Order items:', order.items);
+      console.log('Order items count:', order.items.length);
+
+      const printData: PrintData = {
+        invoiceNumber,
+        date: dateStr,
+        time: timeStr,
+        items: order.items.map(item => ({
+          name: item.product.name,
+          quantity: item.quantity,
+          price: item.product.price * item.quantity
+        })),
+        totalAmount
+      };
+
+      console.log('Print data items count:', printData.items.length);
+      console.log('Print data items:', printData.items);
+
+      // Try direct printing first (will show printer selection if Web Serial API is available)
+      await printReceipt(printData, true);
+    } catch (error: any) {
+      alert(error.message || 'Failed to print. Please try again.');
+      console.error('Print error:', error);
+    } finally {
+      setIsPrinting(false);
     }
-
-    const dateStr = billingDate.toLocaleDateString('en-US', { 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric'
-    });
-    const timeStr = new Date().toLocaleTimeString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-
-    printWindow.document.write(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Invoice #${invoiceNumber}</title>
-          <style>
-            @page {
-              size: 58mm auto;
-              margin: 0;
-              padding: 0;
-            }
-            @media print {
-              * {
-                margin: 0;
-                padding: 0;
-                box-sizing: border-box;
-              }
-              body { 
-                margin: 0;
-                padding: 2mm 3mm;
-                width: 58mm;
-                font-size: 10px;
-              }
-              html, body {
-                height: auto;
-                overflow: visible;
-              }
-            }
-            body {
-              font-family: Arial, sans-serif;
-              width: 58mm;
-              margin: 0;
-              padding: 2mm 3mm;
-              color: #000;
-              font-size: 10px;
-            }
-            .header {
-              text-align: center;
-              border-bottom: 1px solid #000;
-              padding-bottom: 2mm;
-              margin-bottom: 2mm;
-            }
-            .header h1 {
-              margin: 0;
-              font-size: 14px;
-              font-weight: bold;
-              line-height: 1.1;
-            }
-            .header p {
-              margin: 1px 0 0 0;
-              font-size: 9px;
-              line-height: 1.1;
-            }
-            .invoice-info {
-              margin-bottom: 2mm;
-              font-size: 8px;
-              line-height: 1.3;
-            }
-            .invoice-info div {
-              display: flex;
-              justify-content: space-between;
-              margin-bottom: 1px;
-            }
-            .items {
-              border-top: 1px dashed #000;
-              border-bottom: 1px dashed #000;
-              padding: 2mm 0;
-              margin: 2mm 0;
-            }
-            .item {
-              display: flex;
-              justify-content: space-between;
-              margin-bottom: 2mm;
-              font-size: 9px;
-              line-height: 1.2;
-              word-wrap: break-word;
-            }
-            .item-name {
-              flex: 1;
-              margin-right: 2mm;
-            }
-            .item-qty {
-              margin: 0 1mm;
-              white-space: nowrap;
-              font-size: 8px;
-            }
-            .item-price {
-              text-align: right;
-              min-width: 18mm;
-              white-space: nowrap;
-            }
-            .total {
-              margin-top: 2mm;
-              text-align: right;
-            }
-            .total-label {
-              font-size: 10px;
-              font-weight: bold;
-              margin-bottom: 1px;
-            }
-            .total-amount {
-              font-size: 14px;
-              font-weight: bold;
-            }
-            .footer {
-              margin-top: 2mm;
-              text-align: center;
-              font-size: 8px;
-              border-top: 1px dashed #000;
-              padding-top: 2mm;
-            }
-            @media print {
-              .no-print { display: none; }
-            }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <h1>Tea Time</h1>
-            <p>Point of Sale</p>
-          </div>
-          <div class="invoice-info">
-            <div>
-              <span>Invoice #:</span>
-              <span>${invoiceNumber}</span>
-            </div>
-            <div>
-              <span>Date:</span>
-              <span>${dateStr} ${timeStr}</span>
-            </div>
-          </div>
-          <div class="items">
-            ${order.items.map(item => `
-              <div class="item">
-                <span class="item-name">${item.product.name}</span>
-                <span class="item-qty">Qty: ${item.quantity}</span>
-                <span class="item-price">₹${(item.product.price * item.quantity).toFixed(2)}</span>
-              </div>
-            `).join('')}
-          </div>
-          <div class="total">
-            <div class="total-label">Total Amount</div>
-            <div class="total-amount">₹${totalAmount.toFixed(2)}</div>
-          </div>
-          <div class="footer">
-            <p>Thank you for your visit!</p>
-          </div>
-        </body>
-      </html>
-    `);
-    
-    printWindow.document.close();
-    setTimeout(() => {
-      printWindow.print();
-      printWindow.close();
-    }, 250);
   };
 
   return (
@@ -342,13 +210,26 @@ const OrderPanel: React.FC<OrderPanelProps> = ({
         {isReadOnly && !isPending && (
           <button
             onClick={handlePrint}
-            className="w-full py-3 bg-blue-600 text-white rounded-md text-sm font-semibold hover:bg-blue-700 flex items-center justify-center space-x-2"
+            disabled={isPrinting}
+            className="w-full py-3 bg-blue-600 text-white rounded-md text-sm font-semibold hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed flex items-center justify-center space-x-2 transition-colors"
             title="Print Invoice"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-            </svg>
-            <span>Print Invoice</span>
+            {isPrinting ? (
+              <>
+                <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <span>Printing...</span>
+              </>
+            ) : (
+              <>
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                </svg>
+                <span>Print Invoice</span>
+              </>
+            )}
           </button>
         )}
       </div>
