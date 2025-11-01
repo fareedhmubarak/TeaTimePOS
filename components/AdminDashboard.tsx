@@ -5,7 +5,6 @@ import StockManagementPage from './StockManagementPage.tsx';
 import ProductManagementPage from './ProductManagementPage.tsx';
 import ExpenseManagementPage from './ExpenseManagementPage.tsx';
 import DatabaseManagementPage from './DatabaseManagementPage.tsx';
-import PWADiagnostics from './PWADiagnostics.tsx';
 import { ChartBarIcon, DocumentTextIcon, TagIcon, ReceiptIcon, DatabaseIcon, ArrowDownTrayIcon } from './Icons.tsx';
 
 interface AdminDashboardProps {
@@ -150,10 +149,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </div>
         </div>
         <div className="flex-1 p-4 sm:p-6 overflow-y-auto">
-            <PWADiagnostics 
-                installPromptEvent={installPromptEvent}
-                onInstallClick={onInstallClick}
-            />
             {renderView()}
         </div>
     </main>

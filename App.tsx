@@ -179,9 +179,10 @@ const App: React.FC = () => {
     fetchInitialData();
 
     const handleBeforeInstallPrompt = (e: Event) => {
-        console.log('✅ PWA: Install prompt event received! Install button will appear in admin panel', e);
-        e.preventDefault(); // Prevent the mini-infobar from appearing
-        setInstallPromptEvent(e); // Stash the event so it can be triggered later.
+        console.log('✅ PWA: Install prompt event received! Browser will show install icon in toolbar', e);
+        // Don't prevent default - let browser show install icon in toolbar automatically
+        // Store the event for programmatic triggering if needed
+        setInstallPromptEvent(e);
     };
 
     // Check PWA installability
