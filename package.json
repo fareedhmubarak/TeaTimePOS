@@ -5,8 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:5175": "vite --port 5175",
     "build": "vite build",
     "preview": "vite preview",
+    "ngrok": "node ngrok.js",
+    "ngrok:5175": "node ngrok.js 5175",
+    "tunnel": "npm run ngrok",
     "cap:init": "cap init -y",
     "cap:sync": "cap sync",
     "cap:add:android": "cap add android",
@@ -23,6 +27,7 @@
     "@capacitor/android": "^7.4.3",
     "@capacitor/cli": "^7.4.3",
     "@types/node": "^22.14.0",
+    "ngrok": "^5.0.0-beta.2",
     "typescript": "~5.8.2",
     "vite": "^6.2.0"
   }

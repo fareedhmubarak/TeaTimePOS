@@ -46,7 +46,11 @@ const commands = {
   },
   setBold: (enabled: boolean) => encode(ESC + 'E' + String.fromCharCode(enabled ? 1 : 0)),
   setUnderline: (enabled: boolean) => encode(ESC + '-' + String.fromCharCode(enabled ? 1 : 0)),
-  cut: () => encode(GS + 'V' + '\x41' + '\x03'),
+  cut: () => encode(GS + 'V' + '\x41' + '\x00'), // Full cut (65='\x41') with 0 feed lines (saves paper)
+  cutWithFeed: (n: number = 0) => {
+    // Full cut (65) with n feed lines (0 = no feed, saves paper)
+    return encode(GS + 'V' + '\x41' + String.fromCharCode(n));
+  },
   openCashDrawer: () => encode(ESC + 'p' + '\x00' + '\x19' + '\xFF'),
 };
 
@@ -61,12 +65,26 @@ function formatText(text: string, maxWidth: number = 32): string {
  * Creates ESC/POS command sequence for receipt printing
  */
 export function generateReceiptCommands(data: PrintData): Uint8Array {
+  // Validate input data
+  if (!data.items || data.items.length === 0) {
+    throw new Error('No items to print. Cannot generate receipt.');
+  }
+  
+  if (data.items.length > 50) {
+    console.warn('Large number of items:', data.items.length);
+  }
+  
+  console.log('=== GENERATING RECEIPT COMMANDS ===');
+  console.log('Invoice #:', data.invoiceNumber);
+  console.log('Items count:', data.items.length);
+  console.log('All items:', data.items.map((item, idx) => `${idx + 1}. ${item.name} x${item.quantity}`));
+  
   const chunks: Uint8Array[] = [];
   
   // Initialize printer
   chunks.push(commands.init());
   
-  // Header - Centered, Bold, Large
+  // Header - Centered, Bold, Large (compact)
   chunks.push(commands.setTextSize(2, 2));
   chunks.push(commands.setAlign('center'));
   chunks.push(commands.setBold(true));
@@ -74,7 +92,7 @@ export function generateReceiptCommands(data: PrintData): Uint8Array {
   chunks.push(commands.setTextSize(1, 1));
   chunks.push(encode('Point of Sale\n'));
   
-  // Invoice Info - Left aligned
+  // Invoice Info - Left aligned (compact, no extra spacing)
   chunks.push(commands.setAlign('left'));
   chunks.push(commands.setBold(false));
   chunks.push(commands.setTextSize(1, 1));
@@ -131,13 +149,14 @@ export function generateReceiptCommands(data: PrintData): Uint8Array {
   chunks.push(commands.setTextSize(1, 1));
   chunks.push(commands.setBold(false));
   
-  // Footer - reduced spacing
+  // Footer - minimal spacing
   chunks.push(commands.setAlign('center'));
   chunks.push(encode('--------------------------------\n'));
   chunks.push(encode('Thank you for your visit!\n'));
   
-  // Cut paper
-  chunks.push(commands.cut());
+  // Cut paper immediately after footer with NO feed (0 feed lines = no extra space)
+  // This cuts right after the text, saving paper
+  chunks.push(commands.cutWithFeed(0));
   
   // Combine all chunks
   const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
@@ -151,6 +170,41 @@ export function generateReceiptCommands(data: PrintData): Uint8Array {
   return result;
 }
 
+// Cache the serial port connection to avoid showing selection dialog every time
+let cachedPort: SerialPort | null = null;
+let isPortOpen = false;
+
+/**
+ * Gets or creates a serial port connection (reuses cached connection)
+ */
+async function getSerialPort(): Promise<SerialPort> {
+  // If we have a cached open port, reuse it
+  if (cachedPort && isPortOpen && cachedPort.readable && cachedPort.writable) {
+    console.log('Reusing existing printer connection');
+    return cachedPort;
+  }
+  
+  // Otherwise, request a new port (shows selection dialog)
+  console.log('Requesting new printer connection...');
+  const port = await (navigator as any).serial.requestPort();
+  
+  // Open the port with 9600 baud rate (common for thermal printers)
+  await port.open({ baudRate: 9600 });
+  
+  // Cache the port
+  cachedPort = port;
+  isPortOpen = true;
+  
+  // Listen for disconnect events
+  port.addEventListener('disconnect', () => {
+    console.log('Printer disconnected, clearing cache');
+    cachedPort = null;
+    isPortOpen = false;
+  });
+  
+  return port;
+}
+
 /**
  * Prints directly to serial printer using Web Serial API
  */
@@ -159,51 +213,138 @@ export async function printToSerialPrinter(data: PrintData): Promise<void> {
     throw new Error('Web Serial API is not supported in this browser. Please use Chrome, Edge, or Opera.');
   }
   
+  console.log('=== PRINT TO SERIAL PRINTER ===');
+  console.log('Invoice #:', data.invoiceNumber);
+  console.log('Items to print:', data.items.length);
+  console.log('Items:', data.items);
+  
+  let writer: WritableStreamDefaultWriter<Uint8Array> | null = null;
   let port: SerialPort | null = null;
   
   try {
-    // Request serial port access
-    port = await (navigator as any).serial.requestPort();
+    // Get or create serial port connection
+    port = await getSerialPort();
     
-    // Open the port with 9600 baud rate (common for thermal printers)
-    await port.open({ baudRate: 9600 });
+    // Check if port is already open, if not, open it
+    if (!port.readable || !port.writable) {
+      console.log('Port not open, opening...');
+      await port.open({ baudRate: 9600 });
+      isPortOpen = true;
+    }
     
     // Get writable stream
-    const writer = port.writable?.getWriter();
+    writer = port.writable?.getWriter();
     if (!writer) {
       throw new Error('Could not get writer for serial port');
     }
     
     // Generate ESC/POS commands
+    console.log('Generating ESC/POS commands...');
     const commands = generateReceiptCommands(data);
+    console.log('Command buffer size:', commands.length, 'bytes');
     
-    // Write commands to printer
-    await writer.write(commands);
+    // Write commands to printer in smaller chunks for better reliability (especially on tablets)
+    // Smaller chunks help prevent buffer overflow on slower connections
+    const chunkSize = 256; // Reduced from 512 to 256 for better tablet compatibility
+    let offset = 0;
+    const totalChunks = Math.ceil(commands.length / chunkSize);
     
-    // Release writer lock
-    writer.releaseLock();
+    console.log(`Writing ${commands.length} bytes in ${totalChunks} chunks of ${chunkSize} bytes`);
     
-    // Close port
-    await port.close();
-    
-    console.log('Print job sent successfully');
-  } catch (error: any) {
-    if (port) {
+    while (offset < commands.length) {
+      const chunk = commands.slice(offset, Math.min(offset + chunkSize, commands.length));
+      console.log(`Writing chunk ${Math.floor(offset / chunkSize) + 1}/${totalChunks} (${chunk.length} bytes)`);
+      
       try {
-        await port.close();
+        await writer.write(chunk);
+        offset += chunk.length;
+        
+        // Small delay between chunks for reliability (increased slightly for tablets)
+        if (offset < commands.length) {
+          await new Promise(resolve => setTimeout(resolve, 20)); // Increased from 10ms to 20ms
+        }
+      } catch (chunkError: any) {
+        console.error(`Error writing chunk at offset ${offset}:`, chunkError);
+        throw new Error(`Failed to write data chunk: ${chunkError.message}`);
+      }
+    }
+    
+    console.log('All chunks written, waiting for flush...');
+    
+    // Wait for all data to be flushed to printer
+    await writer.ready;
+    
+    // Wait for write buffer to be fully sent
+    await new Promise(resolve => setTimeout(resolve, 200)); // Increased delay for tablet reliability
+    
+    // Release writer lock (but keep port open for next print)
+    writer.releaseLock();
+    writer = null;
+    
+    console.log('Writer released, waiting for printer to process and cut...');
+    
+    // Additional delay to ensure printer fully processes and cuts the paper
+    // Longer delay for tablets which may have slower processing
+    await new Promise(resolve => setTimeout(resolve, 1500)); // Increased from 1000ms to 1500ms for reliability
+    
+    console.log('✅ Print job sent and completed successfully');
+    console.log('⚠️ Keeping port open for next print (no selection dialog needed)');
+    
+    // DON'T close the port - keep it open for reuse
+    // This way next print won't show selection dialog
+    
+  } catch (error: any) {
+    // Clean up writer if still open
+    if (writer) {
+      try {
+        writer.releaseLock();
+      } catch (e) {
+        console.error('Error releasing writer:', e);
+      }
+    }
+    
+    // If port error, clear cache and close
+    if (port && (error.name === 'InvalidStateError' || error.name === 'NetworkError')) {
+      console.log('Port error detected, clearing cache');
+      try {
+        if (isPortOpen) {
+          await port.close();
+        }
       } catch (e) {
         console.error('Error closing port:', e);
       }
+      cachedPort = null;
+      isPortOpen = false;
     }
     
     if (error.name === 'NotFoundError') {
       throw new Error('No printer selected. Please select your Shreyans printer from the device list.');
     } else if (error.name === 'SecurityError') {
       throw new Error('Permission denied. Please allow access to the serial port.');
+    } else if (error.name === 'AbortError') {
+      throw error; // User cancelled, don't wrap
     } else {
+      console.error('Print error details:', error);
       throw new Error(`Print error: ${error.message || 'Unknown error'}`);
     }
   }
+}
+
+/**
+ * Manually disconnect and clear cached printer connection
+ * Call this if you want to allow selecting a different printer next time
+ */
+export async function disconnectPrinter(): Promise<void> {
+  if (cachedPort && isPortOpen) {
+    try {
+      await cachedPort.close();
+      console.log('Printer connection closed');
+    } catch (e) {
+      console.error('Error closing printer:', e);
+    }
+  }
+  cachedPort = null;
+  isPortOpen = false;
 }
 
 /**
@@ -258,13 +399,13 @@ export function printViaBrowser(data: PrintData, onComplete?: () => void): void 
             <div class="item">
               <span class="item-name">${item.name}</span>
               <span class="item-qty">Qty: ${item.quantity}</span>
-              <span class="item-price">₹${item.price.toFixed(2)}</span>
+              <span class="item-price">Rs ${item.price.toFixed(2)}</span>
             </div>
           `).join('')}
         </div>
         <div class="total">
           <div class="total-label">Total Amount</div>
-          <div class="total-amount">₹${data.totalAmount.toFixed(2)}</div>
+          <div class="total-amount">Rs ${data.totalAmount.toFixed(2)}</div>
         </div>
         <div class="footer"><p>Thank you for your visit!</p></div>
       </body>
@@ -280,20 +421,114 @@ export function printViaBrowser(data: PrintData, onComplete?: () => void): void 
 }
 
 /**
+ * Check if Web Serial API is supported and available
+ */
+function isWebSerialAPISupported(): boolean {
+  // Check if Web Serial API exists
+  const hasSerial = 'serial' in navigator;
+  
+  // Get browser information
+  const userAgent = navigator.userAgent || '';
+  const isChrome = /Chrome/.test(userAgent) && /Google Inc/.test(navigator.vendor);
+  const isEdge = /Edg/.test(userAgent);
+  const isOpera = /OPR/.test(userAgent) || /Opera/.test(userAgent);
+  const isSafari = /Safari/.test(userAgent) && !/Chrome/.test(userAgent);
+  const isFirefox = /Firefox/.test(userAgent);
+  const isAndroid = /Android/.test(userAgent);
+  const isIOS = /iPhone|iPad|iPod/.test(userAgent);
+  const isMobile = /Mobile/.test(userAgent) || isAndroid || isIOS;
+  
+  console.log('=== WEB SERIAL API CHECK ===');
+  console.log('Has serial in navigator:', hasSerial);
+  console.log('User Agent:', userAgent);
+  console.log('Browser detection:', {
+    isChrome,
+    isEdge,
+    isOpera,
+    isSafari,
+    isFirefox,
+    isAndroid,
+    isIOS,
+    isMobile
+  });
+  
+  // Web Serial API requirements:
+  // 1. Must be Chrome, Edge, or Opera
+  // 2. Must have 'serial' in navigator
+  // 3. Must be HTTPS or localhost
+  // 4. Not available on iOS Safari
+  // 5. Limited support on Android
+  
+  if (!hasSerial) {
+    console.warn('❌ Web Serial API not found in navigator');
+    if (isSafari || isIOS) {
+      console.warn('Safari/iOS does not support Web Serial API. Please use Chrome, Edge, or Opera.');
+    } else if (isFirefox) {
+      console.warn('Firefox does not support Web Serial API. Please use Chrome, Edge, or Opera.');
+    } else if (isMobile && isAndroid) {
+      console.warn('Android Chrome may have limited Web Serial API support. Try desktop Chrome for best results.');
+    } else if (!isChrome && !isEdge && !isOpera) {
+      console.warn('Browser may not support Web Serial API. Chrome, Edge, or Opera required.');
+    }
+    return false;
+  }
+  
+  // Additional checks
+  const isSecureContext = window.isSecureContext || location.protocol === 'https:' || location.hostname === 'localhost';
+  if (!isSecureContext) {
+    console.warn('Web Serial API requires HTTPS or localhost. Current protocol:', location.protocol);
+    return false;
+  }
+  
+  console.log('✅ Web Serial API is available and should work!');
+  return true;
+}
+
+/**
  * Smart print function that tries direct printing first, falls back to browser printing
  */
 export async function printReceipt(data: PrintData, preferDirect: boolean = true): Promise<void> {
-  if (preferDirect && 'serial' in navigator) {
+  console.log('=== PRINT RECEIPT START ===');
+  console.log('Prefer direct:', preferDirect);
+  
+  // Check Web Serial API support
+  const hasWebSerial = isWebSerialAPISupported();
+  
+  if (preferDirect && hasWebSerial) {
     try {
+      console.log('Attempting direct printing via Web Serial API...');
       await printToSerialPrinter(data);
+      console.log('Direct printing successful!');
       return;
     } catch (error: any) {
-      console.warn('Direct printing failed, falling back to browser print:', error.message);
+      console.error('Direct printing failed:', error);
+      console.warn('Error details:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      });
+      
+      // If it's a user cancellation (AbortError), don't fall back automatically
+      if (error.name === 'AbortError' || error.message?.includes('cancel')) {
+        console.log('User cancelled printer selection');
+        throw error; // Let the caller handle cancellation
+      }
+      
+      console.warn('Falling back to browser print...');
       // Fall through to browser printing
     }
-  }
+  } else {
+      if (!preferDirect) {
+        console.log('Direct printing disabled, using browser print');
+      } else {
+        console.warn('Web Serial API not available, using browser print');
+        // Don't show alert - just log and use browser print silently
+        // The browser print dialog will handle printer selection
+      }
+    }
   
   // Fallback to browser printing
+  console.log('Using browser print fallback');
   printViaBrowser(data);
 }
 
