@@ -7,8 +7,9 @@ import ExpenseModal from './components/ExpenseModal.tsx';
 import PasswordModal from './components/PasswordModal.tsx';
 import OrderPlacedModal from './components/OrderPlacedModal.tsx';
 import UpdateNotification from './components/UpdateNotification.tsx';
+import PrinterSelectionModal from './components/PrinterSelectionModal.tsx';
 import { supabase } from './supabaseClient.ts';
-import { Order, Product, CartItem, BilledItem, Expense, StockEntry, ExpenseItem } from './types.ts';
+import { Order, Product, CartItem, BilledItem, Expense, StockEntry, ExpenseItem, BluetoothPrinter, Category } from './types.ts';
 import { printReceipt, PrintData } from './utils/printer.ts';
 
 let orderCounter = 1;
@@ -87,19 +88,11 @@ const App: React.FC = () => {
   const [view, setView] = useState<'home' | 'pos' | 'admin'>('home');
   const [isExpenseModalOpen, setExpenseModalOpen] = useState(false);
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+  const [isPrinterSelectionModalOpen, setIsPrinterSelectionModalOpen] = useState(false);
+  const [pendingPrintData, setPendingPrintData] = useState<PrintData | null>(null);
+  const [isPrinting, setIsPrinting] = useState(false);
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
   const [orderPlacedInfo, setOrderPlacedInfo] = useState<{ invoiceNumber: number; totalAmount: number; items: Array<{ name: string; quantity: number; price: number }> } | null>(null);
-  
-  // Debug: Log when orderPlacedInfo changes
-  useEffect(() => {
-    console.log('=== orderPlacedInfo STATE CHANGED ===');
-    console.log('Current value:', orderPlacedInfo);
-    console.log('Is truthy?', !!orderPlacedInfo);
-    if (orderPlacedInfo) {
-      console.log('Invoice #:', orderPlacedInfo.invoiceNumber);
-      console.log('Items count:', orderPlacedInfo.items?.length || 0);
-    }
-  }, [orderPlacedInfo]);
   
   // App State
   const [loading, setLoading] = useState(true);
@@ -121,6 +114,91 @@ const App: React.FC = () => {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [stockEntries, setStockEntries] = useState<StockEntry[]>([]);
   const [expenseItems, setExpenseItems] = useState<ExpenseItem[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+
+  // Debug: Log when orderPlacedInfo changes
+  useEffect(() => {
+    console.log('=== orderPlacedInfo STATE CHANGED ===');
+    console.log('Current value:', orderPlacedInfo);
+    console.log('Is truthy?', !!orderPlacedInfo);
+    if (orderPlacedInfo) {
+      console.log('Invoice #:', orderPlacedInfo.invoiceNumber);
+      console.log('Items count:', orderPlacedInfo.items?.length || 0);
+    }
+  }, [orderPlacedInfo]);
+
+  // Auto-print when order is placed if "Save & Print Mode" is enabled
+  // DISABLED: User wants manual print only, no auto-print
+  // useEffect(() => {
+  //   if (!orderPlacedInfo || isPrinting) return;
+
+  //   const autoPrint = async () => {
+  //     setIsPrinting(true);
+  //     try {
+  //       // Check if "Save & Print Mode" is enabled
+  //       const { data: settings } = await supabase
+  //         .from('printer_settings')
+  //         .select('save_and_print_mode, connection_type, selected_bluetooth_printer')
+  //         .order('updated_at', { ascending: false })
+  //         .limit(1)
+  //         .maybeSingle();
+
+  //       const shouldAutoPrint = settings?.save_and_print_mode ?? false; // Default to false - manual print only
+
+  //       if (shouldAutoPrint) {
+  //         console.log('Auto-print enabled, printing automatically...');
+          
+  //         // Get date from current billing date or first billed item
+  //         const firstBilledItem = billedItems.find(item => item.invoiceNumber === orderPlacedInfo.invoiceNumber);
+  //         const timestamp = firstBilledItem?.timestamp || Date.now();
+          
+  //         const dateStr = new Date(timestamp).toLocaleDateString('en-US', { 
+  //           year: 'numeric', 
+  //           month: 'long', 
+  //           day: 'numeric'
+  //         });
+  //         const timeStr = new Date(timestamp).toLocaleTimeString('en-US', {
+  //           hour: '2-digit',
+  //           minute: '2-digit'
+  //         });
+
+  //         const printData: PrintData = {
+  //           invoiceNumber: orderPlacedInfo.invoiceNumber,
+  //           date: dateStr,
+  //           time: timeStr,
+  //           items: orderPlacedInfo.items,
+  //           totalAmount: orderPlacedInfo.totalAmount
+  //         };
+
+  //         // Check if printer is saved
+  //         const hasSavedPrinter = settings && 
+  //           settings.connection_type === 'Bluetooth' && 
+  //           settings.selected_bluetooth_printer;
+
+  //         if (hasSavedPrinter) {
+  //           console.log('Found saved printer, auto-printing...');
+  //           await printReceipt(printData, true);
+  //         } else {
+  //           console.log('No saved printer, showing selection modal...');
+  //           setPendingPrintData(printData);
+  //           setIsPrinterSelectionModalOpen(true);
+  //         }
+  //       }
+  //     } catch (error: any) {
+  //       console.warn('Auto-print check failed:', error);
+  //       // Silent fail - user can still manually print
+  //     } finally {
+  //       setIsPrinting(false);
+  //     }
+  //   };
+
+  //   // Small delay to ensure modal is rendered first
+  //   const timer = setTimeout(() => {
+  //     autoPrint();
+  //   }, 100);
+
+  //   return () => clearTimeout(timer);
+  // }, [orderPlacedInfo, billedItems, isPrinting]);
 
   // Initialize: Clear any existing auth on mount
   useEffect(() => {
@@ -138,17 +216,19 @@ const App: React.FC = () => {
                 expenseItemsData,
                 expensesData,
                 invoicesData,
-                stockEntriesData
+                stockEntriesData,
+                categoriesData
             ] = await Promise.all([
                 supabase.from('products').select('*'),
                 supabase.from('expense_items').select('*'),
                 supabase.from('expenses').select('*').order('expense_date', { ascending: false }),
                 supabase.from('invoices').select('*, invoice_items(*)').order('id', { ascending: false }).limit(100), // Load more for accurate daily invoice numbers
-                supabase.from('purchase_entries').select('*, purchase_items(*)').order('entry_date', { ascending: false })
+                supabase.from('purchase_entries').select('*, purchase_items(*)').order('entry_date', { ascending: false }),
+                supabase.from('categories').select('*').order('display_order', { ascending: true })
             ]);
 
             // Check for errors in parallel fetches
-            const errors = [productsData.error, expenseItemsData.error, expensesData.error, invoicesData.error, stockEntriesData.error].filter(Boolean);
+            const errors = [productsData.error, expenseItemsData.error, expensesData.error, invoicesData.error, stockEntriesData.error, categoriesData.error].filter(Boolean);
             if (errors.length > 0) {
                 throw new Error(errors.map(e => e?.message).join(', '));
             }
@@ -168,6 +248,12 @@ const App: React.FC = () => {
             setBilledItems(mappedBilledItems);
             
             setStockEntries((stockEntriesData.data || []).map(mapPurchaseEntryToStockEntry));
+            
+            setCategories((categoriesData.data || []).map((c: any) => ({
+                id: c.id,
+                name: c.name,
+                displayOrder: c.display_order
+            })));
 
         } catch (err: any) {
             console.error("Error fetching initial data:", err);
@@ -265,6 +351,21 @@ const App: React.FC = () => {
           console.log('Service Worker activated:', event.data.version);
         }
       });
+      
+      // Listen for printer selection requests from OrderPanel
+      const handleShowPrinterSelection = (event: CustomEvent) => {
+        console.log('Received showPrinterSelection event:', event.detail);
+        if (event.detail && event.detail.printData) {
+          setPendingPrintData(event.detail.printData);
+          setIsPrinterSelectionModalOpen(true);
+        }
+      };
+      
+      window.addEventListener('showPrinterSelection', handleShowPrinterSelection as EventListener);
+      
+      return () => {
+        window.removeEventListener('showPrinterSelection', handleShowPrinterSelection as EventListener);
+      };
     }
 
     return () => {
@@ -964,6 +1065,7 @@ const App: React.FC = () => {
             activeOrderIndex={activeOrderIndex}
             activeOrder={activeOrder}
             products={products}
+            categories={categories}
             billedItems={billedItems}
             viewedInvoiceNumber={viewedInvoiceNumber}
             viewedOrder={viewedOrder}
@@ -1038,7 +1140,7 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="h-screen flex flex-col bg-gray-100 font-sans text-gray-800">
+    <div className="h-screen flex flex-col bg-gray-100 font-sans text-gray-800 overflow-hidden">
       {loading && (
         <div className="fixed top-0 left-0 w-full h-full bg-black bg-opacity-20 z-50 flex items-center justify-center">
             <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-purple-500"></div>
@@ -1056,8 +1158,11 @@ const App: React.FC = () => {
         onGoToNewOrder={handleGoToNewOrder}
         isViewingHistory={viewedInvoiceNumber !== null}
         onAddExpenseClick={() => setExpenseModalOpen(true)}
+        onToggleSidebar={view === 'pos' ? () => {} : undefined}
       />
-      {renderContent()}
+      <div className="flex-1 overflow-hidden min-h-0">
+        {renderContent()}
+      </div>
       <ExpenseModal 
         isOpen={isExpenseModalOpen}
         onClose={() => setExpenseModalOpen(false)}
@@ -1074,6 +1179,24 @@ const App: React.FC = () => {
         isVisible={showUpdateNotification}
         onUpdate={handleUpdateApp}
         onDismiss={() => setShowUpdateNotification(false)}
+      />
+      <PrinterSelectionModal
+        isOpen={isPrinterSelectionModalOpen}
+        onClose={() => {
+          setIsPrinterSelectionModalOpen(false);
+          setPendingPrintData(null);
+        }}
+        onSelect={async (printer: BluetoothPrinter) => {
+          // Printer is already saved by the modal
+          console.log('Printer selected:', printer.name);
+          
+          // DON'T auto-print - just save the printer and close the modal
+          // User will click Print button manually when ready
+          
+          setIsPrinterSelectionModalOpen(false);
+          setPendingPrintData(null);
+          // Don't close order modal - let user decide when to print
+        }}
       />
       {orderPlacedInfo && (
         <OrderPlacedModal
@@ -1168,10 +1291,43 @@ const App: React.FC = () => {
                 console.log('Print data items count:', printData.items.length);
                 console.log('Print data items:', printData.items);
                 console.log('Print data total:', printData.totalAmount);
-                console.log('=== SENDING TO PRINTER ===');
+                console.log('=== CHECKING FOR SAVED PRINTER ===');
 
-                // Try direct printing first (will show printer selection if Web Serial API is available)
-                await printReceipt(printData, true);
+                // Check if printer is saved in settings
+                try {
+                  const { data: settings } = await supabase
+                    .from('printer_settings')
+                    .select('connection_type, selected_bluetooth_printer')
+                    .order('updated_at', { ascending: false })
+                    .limit(1)
+                    .maybeSingle();
+
+                  const hasSavedPrinter = settings && 
+                    settings.connection_type === 'Bluetooth' && 
+                    settings.selected_bluetooth_printer;
+
+                  if (hasSavedPrinter) {
+                    console.log('Found saved printer, printing directly...');
+                    await printReceipt(printData, true);
+                  } else {
+                    console.log('No saved printer found, showing selection modal...');
+                    // Show printer selection modal
+                    setPendingPrintData(printData);
+                    setIsPrinterSelectionModalOpen(true);
+                    return; // Don't close modal yet, wait for printer selection
+                  }
+                } catch (error: any) {
+                  console.warn('Error checking printer settings:', error);
+                  // If settings check fails, check if error is about no printer, then show modal
+                  if (error.code === 'PGRST116' || !error.code) {
+                    // No settings found, show printer selection modal
+                    setPendingPrintData(printData);
+                    setIsPrinterSelectionModalOpen(true);
+                    return;
+                  }
+                  // Otherwise, try printing (will throw error if no printer)
+                  await printReceipt(printData, true);
+                }
                 
                 console.log('=== PRINT COMPLETE ===');
               } catch (error: any) {

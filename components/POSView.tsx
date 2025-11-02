@@ -2,8 +2,7 @@ import React, { useState, useMemo, useEffect } from "react";
 import CategorySidebar from "./CategorySidebar.tsx";
 import ProductGrid from "./ProductGrid.tsx";
 import OrderPanel from "./OrderPanel.tsx";
-import { CATEGORIES } from "../constants.ts";
-import { Order, Product, CartItem, BilledItem } from "../types.ts";
+import { Order, Product, CartItem, BilledItem, Category } from "../types.ts";
 import { ShoppingCartIcon } from "./Icons.tsx";
 
 interface POSViewProps {
@@ -11,6 +10,7 @@ interface POSViewProps {
   activeOrderIndex: number;
   activeOrder: Order;
   products: Product[];
+  categories: Category[];
   billedItems: BilledItem[];
   viewedInvoiceNumber: number | null;
   viewedOrder: Order | null;
@@ -37,6 +37,7 @@ const POSView: React.FC<POSViewProps> = ({
   activeOrderIndex,
   activeOrder,
   products,
+  categories,
   billedItems,
   viewedInvoiceNumber,
   viewedOrder,
@@ -57,23 +58,28 @@ const POSView: React.FC<POSViewProps> = ({
   onDeleteInvoice,
   onGoToNewOrder,
 }) => {
-  // Get all unique categories from products + default categories
+  // Get all unique categories: ordered categories from DB + product categories not in DB
   const allCategories = useMemo(() => {
-    const defaultCats = CATEGORIES;
+    // Get category names from ordered categories
+    const orderedCategoryNames = categories.map(c => c.name);
+    
+    // Get unique product categories that aren't in the ordered list
     const productCats = products
       .map((p) => p.category)
       .filter(
         (cat, index, self) =>
-          cat && cat !== "FREQUENT" && self.indexOf(cat) === index
+          cat && 
+          cat !== "FREQUENT" && 
+          self.indexOf(cat) === index &&
+          !orderedCategoryNames.includes(cat)
       );
-    const uniqueCats = Array.from(
-      new Set([...defaultCats, ...productCats])
-    ).sort();
-    return uniqueCats;
-  }, [products]);
+    
+    // Combine: ordered categories first, then product categories
+    return [...orderedCategoryNames, ...productCats];
+  }, [categories, products]);
 
   const [selectedCategory, setSelectedCategory] = useState(
-    allCategories[0] || CATEGORIES[0]
+    allCategories[0] || 'TEA'
   );
   const [searchTerm, setSearchTerm] = useState("");
   const [isMobileSidebarOpen, setMobileSidebarOpen] = useState(false);
@@ -113,7 +119,7 @@ const POSView: React.FC<POSViewProps> = ({
   const isEditing = editingInvoiceNumber !== null;
 
   return (
-    <div className="flex flex-1 overflow-hidden">
+    <div className="flex flex-1 overflow-hidden h-full">
       {isMobileSidebarOpen && (
         <div
           className="fixed inset-0 bg-black bg-opacity-50 z-20 md:hidden"
@@ -127,8 +133,8 @@ const POSView: React.FC<POSViewProps> = ({
         isOpen={isMobileSidebarOpen}
         onClose={() => setMobileSidebarOpen(false)}
       />
-      <main className="flex flex-1 relative">
-        <div className="flex-grow flex flex-col p-2 sm:p-4 overflow-hidden">
+      <main className="flex flex-1 relative h-full overflow-hidden">
+        <div className="flex-grow flex flex-col p-1 sm:p-2 overflow-hidden h-full">
           <ProductGrid
             products={filteredProducts}
             onAddItem={onAddItem}

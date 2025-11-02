@@ -80,14 +80,12 @@ const PasswordModal: React.FC<PasswordModalProps> = ({ isOpen, onClose, onSucces
                 setPassword(e.target.value);
                 setError('');
               }}
-              onFocus={(e) => e.target.select()}
               className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${
                 error ? 'border-red-500' : 'border-gray-300'
               }`}
               placeholder="Enter password"
               autoComplete="off"
               autoFocus
-              style={{ pointerEvents: 'auto', zIndex: 10000 }}
             />
             {error && (
               <p className="mt-2 text-sm text-red-600">{error}</p>

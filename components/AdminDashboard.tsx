@@ -1,11 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { BilledItem, Expense, StockEntry, Product, ExpenseItem } from '../types.ts';
 import ReportsPage from './ReportsPage.tsx';
 import StockManagementPage from './StockManagementPage.tsx';
 import ProductManagementPage from './ProductManagementPage.tsx';
 import ExpenseManagementPage from './ExpenseManagementPage.tsx';
 import DatabaseManagementPage from './DatabaseManagementPage.tsx';
-import { ChartBarIcon, DocumentTextIcon, TagIcon, ReceiptIcon, DatabaseIcon, ArrowDownTrayIcon } from './Icons.tsx';
+import CategoryManagementPage from './CategoryManagementPage.tsx';
+import PrinterSettingsPage from './PrinterSettingsPage.tsx';
+import { ChartBarIcon, DocumentTextIcon, TagIcon, ReceiptIcon, DatabaseIcon, ArrowDownTrayIcon, PrinterIcon, MenuIcon } from './Icons.tsx';
 
 interface AdminDashboardProps {
   billedItems: BilledItem[];
@@ -28,7 +30,7 @@ interface AdminDashboardProps {
   onInstallClick?: () => void;
 }
 
-type AdminTab = 'reports' | 'expenses' | 'items' | 'expenseItems' | 'database';
+type AdminTab = 'reports' | 'expenses' | 'items' | 'expenseItems' | 'database' | 'printer' | 'categories';
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ 
   billedItems, expenses, stockEntries, products, expenseItems,
@@ -39,6 +41,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   installPromptEvent, onInstallClick,
 }) => {
   const [activeTab, setActiveTab] = useState<AdminTab>('reports');
+  
+  // Reload printer settings when printer tab becomes active
+  useEffect(() => {
+    if (activeTab === 'printer') {
+      // Trigger a custom event that PrinterSettingsPage can listen to
+      window.dispatchEvent(new CustomEvent('printerTabActivated'));
+    }
+  }, [activeTab]);
 
   const renderView = () => {
     switch (activeTab) {
@@ -68,6 +78,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                />;
       case 'database':
         return <DatabaseManagementPage onNavigate={onNavigate} onViewInvoice={onViewInvoice} />;
+      case 'printer':
+        return <PrinterSettingsPage key={activeTab} />;
+      case 'categories':
+        return <CategoryManagementPage key={activeTab} />;
       default:
         return null;
     }
@@ -112,6 +126,20 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 >
                     <DatabaseIcon className="w-5 h-5 mr-2" />
                     Database
+                </button>
+                <button
+                    onClick={() => setActiveTab('printer')}
+                    className={`flex items-center whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'printer' ? 'border-purple-500 text-purple-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
+                >
+                    <PrinterIcon className="w-5 h-5 mr-2" />
+                    Printer
+                </button>
+                <button
+                    onClick={() => setActiveTab('categories')}
+                    className={`flex items-center whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'categories' ? 'border-purple-500 text-purple-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
+                >
+                    <MenuIcon className="w-5 h-5 mr-2" />
+                    Categories
                 </button>
                 </nav>
                 <div className="flex items-center gap-2">

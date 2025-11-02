@@ -96,6 +96,53 @@ CREATE TABLE IF NOT EXISTS purchase_items (
 );
 
 -- =================================================================================
+-- TABLE: categories
+-- =================================================================================
+CREATE TABLE IF NOT EXISTS categories (
+    id BIGSERIAL PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE,
+    display_order INTEGER NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Insert default categories with initial order
+INSERT INTO categories (name, display_order) VALUES
+    ('COOLERS', 1),
+    ('FLAVORED MILK', 2),
+    ('MILKSHAKE', 3),
+    ('MOJITOS', 4),
+    ('SNACKS', 5),
+    ('TEA', 6),
+    ('WATER', 7)
+ON CONFLICT (name) DO NOTHING;
+
+-- =================================================================================
+-- TABLE: printer_settings
+-- =================================================================================
+CREATE TABLE IF NOT EXISTS printer_settings (
+    id BIGSERIAL PRIMARY KEY,
+    save_button BOOLEAN DEFAULT FALSE,
+    save_and_print_mode BOOLEAN DEFAULT TRUE,
+    connection_type TEXT CHECK (connection_type IN ('USB', 'Bluetooth', 'Lan')) DEFAULT 'Bluetooth',
+    paper_size TEXT CHECK (paper_size IN ('58mm', '72mm', '80mm')) DEFAULT '58mm',
+    selected_bluetooth_printer JSONB,
+    shop_name TEXT DEFAULT 'Tea Time Kuppam',
+    contact_number TEXT,
+    fssai_no TEXT,
+    gst TEXT,
+    footer TEXT,
+    shop_address TEXT DEFAULT 'Palace Road Kuppam',
+    bank_details TEXT,
+    footer_note TEXT,
+    print_options JSONB DEFAULT '{}'::jsonb,
+    print_logo BOOLEAN DEFAULT FALSE,
+    print_qr BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- =================================================================================
 -- INDEXES for better query performance
 -- =================================================================================
 CREATE INDEX IF NOT EXISTS idx_invoice_items_invoice_id ON invoice_items(invoice_id);
@@ -138,6 +185,8 @@ ALTER TABLE invoices ENABLE ROW LEVEL SECURITY;
 ALTER TABLE invoice_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE purchase_entries ENABLE ROW LEVEL SECURITY;
 ALTER TABLE purchase_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE printer_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE categories ENABLE ROW LEVEL SECURITY;
 
 -- Allow all operations for authenticated and anonymous users (for development)
 -- NOTE: For production, replace these with proper authentication-based policies
@@ -170,6 +219,14 @@ CREATE POLICY "Allow all operations on purchase_entries" ON purchase_entries
 CREATE POLICY "Allow all operations on purchase_items" ON purchase_items
     FOR ALL USING (true) WITH CHECK (true);
 
+-- Printer settings policies
+CREATE POLICY "Allow all operations on printer_settings" ON printer_settings
+    FOR ALL USING (true) WITH CHECK (true);
+
+-- Categories policies
+CREATE POLICY "Allow all operations on categories" ON categories
+    FOR ALL USING (true) WITH CHECK (true);
+
 -- =================================================================================
 -- GRANT PERMISSIONS (Ensure anon and authenticated roles can access)
 -- =================================================================================
@@ -180,6 +237,8 @@ GRANT ALL ON invoices TO anon, authenticated;
 GRANT ALL ON invoice_items TO anon, authenticated;
 GRANT ALL ON purchase_entries TO anon, authenticated;
 GRANT ALL ON purchase_items TO anon, authenticated;
+GRANT ALL ON printer_settings TO anon, authenticated;
+GRANT ALL ON categories TO anon, authenticated;
 
 -- Grant sequence permissions (for auto-incrementing IDs)
 GRANT USAGE, SELECT ON SEQUENCE products_id_seq TO anon, authenticated;
@@ -189,6 +248,8 @@ GRANT USAGE, SELECT ON SEQUENCE invoices_id_seq TO anon, authenticated;
 GRANT USAGE, SELECT ON SEQUENCE invoice_items_id_seq TO anon, authenticated;
 GRANT USAGE, SELECT ON SEQUENCE purchase_entries_id_seq TO anon, authenticated;
 GRANT USAGE, SELECT ON SEQUENCE purchase_items_id_seq TO anon, authenticated;
+GRANT USAGE, SELECT ON SEQUENCE printer_settings_id_seq TO anon, authenticated;
+GRANT USAGE, SELECT ON SEQUENCE categories_id_seq TO anon, authenticated;
 
 -- Grant execute permission on the function
 GRANT EXECUTE ON FUNCTION get_public_tables() TO anon, authenticated;

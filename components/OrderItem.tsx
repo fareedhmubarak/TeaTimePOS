@@ -11,41 +11,41 @@ interface OrderItemProps {
 
 const OrderItem: React.FC<OrderItemProps> = ({ item, onUpdateQuantity, onRemoveItem, isReadOnly }) => {
   return (
-    <div className="flex items-center">
-      <div className="flex-1">
-        <p className="text-lg font-semibold">{item.product.name}</p>
-        <p className="text-base text-gray-500">₹{item.product.price}</p>
+    <div className="flex items-center gap-2 py-1">
+      <div className="flex-1 min-w-0">
+        <p className="text-xs font-semibold truncate">{item.product.name}</p>
+        <p className="text-xs text-gray-500">₹{item.product.price}</p>
       </div>
-      <div className="flex items-center space-x-2">
+      <div className="flex items-center space-x-1">
         {isReadOnly ? (
-          <span className="text-lg text-gray-600 font-medium px-3">Qty: {item.quantity}</span>
+          <span className="text-xs text-gray-600 font-medium px-2">Qty: {item.quantity}</span>
         ) : (
           <>
             <button
               onClick={() => onRemoveItem(item.product.id)}
-              className="p-1 rounded-full text-red-500 hover:bg-red-100"
+              className="p-0.5 rounded text-red-500 hover:bg-red-100"
             >
-              <TrashIcon className="w-4 h-4" />
+              <TrashIcon className="w-3 h-3" />
             </button>
-            <div className="flex items-center border border-gray-300 rounded-md">
+            <div className="flex items-center border border-gray-300 rounded">
               <button
                 onClick={() => onUpdateQuantity(item.product.id, item.quantity - 1)}
-                className="p-1 text-red-500 hover:bg-gray-100 rounded-l-md"
+                className="p-0.5 text-red-500 hover:bg-gray-100 rounded-l"
               >
-                <MinusIcon className="w-4 h-4" />
+                <MinusIcon className="w-3 h-3" />
               </button>
-              <span className="px-4 text-lg font-bold">{item.quantity}</span>
+              <span className="px-2 text-xs font-bold">{item.quantity}</span>
               <button
                 onClick={() => onUpdateQuantity(item.product.id, item.quantity + 1)}
-                className="p-1 text-green-500 hover:bg-gray-100 rounded-r-md"
+                className="p-0.5 text-green-500 hover:bg-gray-100 rounded-r"
               >
-                <PlusIcon className="w-4 h-4" />
+                <PlusIcon className="w-3 h-3" />
               </button>
             </div>
           </>
         )}
       </div>
-      <div className="w-24 text-right font-semibold text-lg">
+      <div className="w-16 text-right font-semibold text-xs">
         ₹{item.product.price * item.quantity}
       </div>
     </div>

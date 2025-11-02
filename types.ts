@@ -1,3 +1,9 @@
+export interface Category {
+  id: number;
+  name: string;
+  displayOrder: number;
+}
+
 export interface Product {
   id: number;
   name: string;
@@ -65,4 +71,41 @@ export interface AppSettings {
   monthlySalary: number;
   milkRatePerLiter: number;
   dailyMilkUsageLiters: number;
+}
+
+export interface BluetoothPrinter {
+  id: string;
+  name: string;
+  address: string; // MAC address
+}
+
+export interface PrinterSettings {
+  id?: number;
+  saveButton: boolean;
+  saveAndPrintMode: boolean;
+  connectionType: 'USB' | 'Bluetooth' | 'Lan';
+  paperSize: '58mm' | '72mm' | '80mm';
+  selectedBluetoothPrinter?: BluetoothPrinter | null;
+  shopName: string;
+  contactNumber: string;
+  fssaiNo: string;
+  gst: string;
+  footer: string;
+  shopAddress: string;
+  bankDetails: string;
+  footerNote: string;
+  printOptions: {
+    merchantCopy: boolean;
+    productWiseToken: boolean;
+    showPaidText: boolean;
+    showGstAbstract: boolean;
+    showMrpColumn: boolean;
+    disableEstimateLabel: boolean;
+    showFullPriceIncGst: boolean;
+    showTaxInvoiceLabel: boolean;
+    dontShowBalanceInCreditBill: boolean;
+    showDescriptionInKot: boolean;
+  };
+  printLogo: boolean;
+  printQr: boolean;
 }
