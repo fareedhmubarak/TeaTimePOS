@@ -5,6 +5,7 @@ interface Expense {
     date: string;
     description: string;
     type: string;
+    quantity: number | string;
     amount: number;
 }
 
@@ -34,6 +35,7 @@ const ExpenseDetailModal: React.FC<ExpenseDetailModalProps> = ({ isOpen, onClose
                         <th scope="col" className="px-6 py-3">Date</th>
                         <th scope="col" className="px-6 py-3">Description</th>
                         <th scope="col" className="px-6 py-3">Type</th>
+                        <th scope="col" className="px-6 py-3 text-center">Unit</th>
                         <th scope="col" className="px-6 py-3 text-right">Amount</th>
                     </tr>
                 </thead>
@@ -43,11 +45,12 @@ const ExpenseDetailModal: React.FC<ExpenseDetailModalProps> = ({ isOpen, onClose
                             <td className="px-6 py-4 text-gray-600 whitespace-nowrap">{item.date}</td>
                             <td className="px-6 py-4 font-medium text-gray-900">{item.description}</td>
                             <td className="px-6 py-4 text-gray-600">{item.type}</td>
+                            <td className="px-6 py-4 text-center text-gray-600">{item.quantity}</td>
                             <td className="px-6 py-4 text-right text-red-600">₹{item.amount.toFixed(2)}</td>
                         </tr>
                     ))}
                     {expenses.length === 0 && (
-                        <tr><td colSpan={4} className="text-center py-8 text-gray-500">No expenses recorded in this period.</td></tr>
+                        <tr><td colSpan={5} className="text-center py-8 text-gray-500">No expenses recorded in this period.</td></tr>
                     )}
                 </tbody>
             </table>

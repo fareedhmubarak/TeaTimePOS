@@ -778,17 +778,17 @@ ${settings.footerNote || ''}
           </button>
         )}
         <div>
-          <h1 className="text-3xl font-bold text-gray-800">Printer</h1>
-          <p className="text-sm text-gray-500 mt-1">Printer v12.9.1</p>
+          <h1 className="text-xl font-bold text-gray-800">Printer</h1>
+          <p className="text-base text-gray-500 mt-1">Printer v12.9.1</p>
         </div>
-        <div className="ml-auto text-sm text-gray-600 bg-yellow-50 px-3 py-1 rounded">
+        <div className="ml-auto text-base text-gray-600 bg-yellow-50 px-3 py-1 rounded">
           Note: Settings will work only, when internet is connected
         </div>
       </div>
 
       {/* Message */}
       {message && (
-        <div className={`p-4 rounded-lg ${message.type === 'success' ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'}`}>
+        <div className={`p-4 rounded-lg text-base ${message.type === 'success' ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'}`}>
           {message.text}
         </div>
       )}
@@ -797,8 +797,8 @@ ${settings.footerNote || ''}
       <div className="bg-white p-6 rounded-lg shadow">
         <div className="flex items-center justify-between">
           <div>
-            <label className="text-lg font-semibold text-gray-700">Save button</label>
-            <p className="text-sm text-gray-500 mt-1">If enabled, allows to save bill without print.</p>
+            <label className="text-base font-semibold text-gray-700">Save button</label>
+            <p className="text-base text-gray-500 mt-1">If enabled, allows to save bill without print.</p>
           </div>
           <label className="relative inline-flex items-center cursor-pointer">
             <input
@@ -816,8 +816,8 @@ ${settings.footerNote || ''}
       <div className="bg-white p-6 rounded-lg shadow">
         <div className="flex items-center justify-between">
           <div>
-            <label className="text-lg font-semibold text-gray-700">Save & Print Mode</label>
-            <p className="text-sm text-gray-500 mt-1">Save & Print your billing receipt every time.</p>
+            <label className="text-base font-semibold text-gray-700">Save & Print Mode</label>
+            <p className="text-base text-gray-500 mt-1">Save & Print your billing receipt every time.</p>
           </div>
           <label className="relative inline-flex items-center cursor-pointer">
             <input
@@ -834,8 +834,8 @@ ${settings.footerNote || ''}
       {/* Paper Size */}
       <div className="bg-white p-6 rounded-lg shadow">
         <h2 className="text-xl font-semibold text-gray-700 mb-2">Paper Size</h2>
-        <p className="text-sm text-gray-500 mb-4">Select thermal printer paper size.</p>
-        <p className="text-sm text-gray-600 mb-4">Now 58mm (2inch) 80mm (3inch)</p>
+        <p className="text-base text-gray-500 mb-4">Select thermal printer paper size.</p>
+        <p className="text-base text-gray-600 mb-4">Now 58mm (2inch) 80mm (3inch)</p>
 
         <div className="space-y-4">
           {/* USB */}
@@ -858,7 +858,7 @@ ${settings.footerNote || ''}
                     }}
                     className="w-4 h-4 text-purple-600"
                   />
-                  <span className="text-sm">{size}</span>
+                  <span className="text-base">{size}</span>
                 </label>
               ))}
             </div>
@@ -884,7 +884,7 @@ ${settings.footerNote || ''}
                     }}
                     className="w-4 h-4 text-purple-600"
                   />
-                  <span className="text-sm">{size}</span>
+                  <span className="text-base">{size}</span>
                 </label>
               ))}
             </div>
@@ -910,7 +910,7 @@ ${settings.footerNote || ''}
                     }}
                     className="w-4 h-4 text-purple-600"
                   />
-                  <span className="text-sm">{size}</span>
+                  <span className="text-base">{size}</span>
                 </label>
               ))}
             </div>
@@ -926,7 +926,7 @@ ${settings.footerNote || ''}
             <button
               onClick={scanBluetoothPrinters}
               disabled={isScanning}
-              className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-base"
             >
               <RefreshIcon className={`w-5 h-5 ${isScanning ? 'animate-spin' : ''}`} />
               Refresh Printers
@@ -940,20 +940,20 @@ ${settings.footerNote || ''}
                 <BluetoothIcon className="w-5 h-5 text-gray-600" />
                 <div>
                   <p className="font-medium text-gray-700">{settings.selectedBluetoothPrinter.name}</p>
-                  <p className="text-sm text-gray-500">{settings.selectedBluetoothPrinter.address}</p>
-                  <p className="text-xs text-green-600 mt-1">✓ Saved Printer</p>
+                  <p className="text-base text-gray-500">{settings.selectedBluetoothPrinter.address}</p>
+                  <p className="text-sm text-green-600 mt-1">✓ Saved Printer</p>
                 </div>
               </div>
               <div className="flex gap-2">
                 <button
                   onClick={() => testPrint()}
                   disabled={isPrinting}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors text-base"
                 >
                   Test Print
                 </button>
                 <button
-                  className="px-4 py-2 bg-green-600 text-white rounded-lg"
+                  className="px-4 py-2 bg-green-600 text-white rounded-lg text-base"
                 >
                   Selected
                 </button>
@@ -962,7 +962,7 @@ ${settings.footerNote || ''}
           )}
 
           {bluetoothPrinters.length === 0 && !isScanning && !settings.selectedBluetoothPrinter && (
-            <p className="text-gray-500 text-sm">No printers found. Click "Refresh Printers" to scan.</p>
+            <p className="text-gray-500 text-base">No printers found. Click "Refresh Printers" to scan.</p>
           )}
 
           {bluetoothPrinters.map((printer) => (
@@ -971,20 +971,20 @@ ${settings.footerNote || ''}
                 <BluetoothIcon className="w-5 h-5 text-gray-600" />
                 <div>
                   <p className="font-medium text-gray-700">{printer.name}</p>
-                  <p className="text-sm text-gray-500">{printer.address}</p>
+                  <p className="text-base text-gray-500">{printer.address}</p>
                 </div>
               </div>
               <div className="flex gap-2">
                 <button
                   onClick={() => testPrint()}
                   disabled={isPrinting}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors text-base"
                 >
                   Test Print
                 </button>
                 <button
                   onClick={() => selectPrinter(printer)}
-                  className={`px-4 py-2 rounded-lg transition-colors ${
+                  className={`px-4 py-2 rounded-lg transition-colors text-base ${
                     settings.selectedBluetoothPrinter?.id === printer.id
                       ? 'bg-green-600 text-white'
                       : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
@@ -1003,12 +1003,12 @@ ${settings.footerNote || ''}
         <h2 className="text-xl font-semibold text-gray-700 mb-4">Add print Information</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Shop name</label>
+            <label className="block text-base font-medium text-gray-700 mb-1">Shop name</label>
             <input
               type="text"
               value={settings.shopName}
               onChange={(e) => handleInputChange('shopName', e.target.value)}
-              className="w-full p-2 border rounded-md bg-white"
+              className="w-full p-2 border rounded-md bg-white text-base"
             />
           </div>
           <div>
@@ -1017,7 +1017,7 @@ ${settings.footerNote || ''}
               type="text"
               value={settings.contactNumber}
               onChange={(e) => handleInputChange('contactNumber', e.target.value)}
-              className="w-full p-2 border rounded-md bg-white"
+              className="w-full p-2 border rounded-md bg-white text-base"
             />
           </div>
           <div>
@@ -1026,7 +1026,7 @@ ${settings.footerNote || ''}
               type="text"
               value={settings.fssaiNo}
               onChange={(e) => handleInputChange('fssaiNo', e.target.value)}
-              className="w-full p-2 border rounded-md bg-white"
+              className="w-full p-2 border rounded-md bg-white text-base"
             />
           </div>
           <div>
@@ -1035,7 +1035,7 @@ ${settings.footerNote || ''}
               type="text"
               value={settings.gst}
               onChange={(e) => handleInputChange('gst', e.target.value)}
-              className="w-full p-2 border rounded-md bg-white"
+              className="w-full p-2 border rounded-md bg-white text-base"
             />
           </div>
           <div>
@@ -1044,7 +1044,7 @@ ${settings.footerNote || ''}
               type="text"
               value={settings.footer}
               onChange={(e) => handleInputChange('footer', e.target.value)}
-              className="w-full p-2 border rounded-md bg-white"
+              className="w-full p-2 border rounded-md bg-white text-base"
             />
           </div>
           <div>
@@ -1053,7 +1053,7 @@ ${settings.footerNote || ''}
               type="text"
               value={settings.shopAddress}
               onChange={(e) => handleInputChange('shopAddress', e.target.value)}
-              className="w-full p-2 border rounded-md bg-white"
+              className="w-full p-2 border rounded-md bg-white text-base"
             />
           </div>
           <div>
@@ -1062,7 +1062,7 @@ ${settings.footerNote || ''}
               type="text"
               value={settings.bankDetails}
               onChange={(e) => handleInputChange('bankDetails', e.target.value)}
-              className="w-full p-2 border rounded-md bg-white"
+              className="w-full p-2 border rounded-md bg-white text-base"
             />
           </div>
           <div>
@@ -1071,7 +1071,7 @@ ${settings.footerNote || ''}
               type="text"
               value={settings.footerNote}
               onChange={(e) => handleInputChange('footerNote', e.target.value)}
-              className="w-full p-2 border rounded-md bg-white"
+              className="w-full p-2 border rounded-md bg-white text-base"
             />
           </div>
         </div>
@@ -1100,7 +1100,7 @@ ${settings.footerNote || ''}
                 onChange={(e) => handlePrintOptionChange(key as keyof PrinterSettings['printOptions'], e.target.checked)}
                 className="w-4 h-4 text-purple-600 rounded"
               />
-              <span className="text-sm text-gray-700">{label}</span>
+              <span className="text-base text-gray-700">{label}</span>
             </label>
           ))}
         </div>
@@ -1117,7 +1117,7 @@ ${settings.footerNote || ''}
               onChange={(e) => handleInputChange('printLogo', e.target.checked)}
               className="w-4 h-4 text-purple-600 rounded"
             />
-            <span className="text-sm text-gray-700">Print Logo</span>
+            <span className="text-base text-gray-700">Print Logo</span>
           </label>
           <label className="flex items-center gap-2 cursor-pointer">
             <input
@@ -1126,7 +1126,7 @@ ${settings.footerNote || ''}
               onChange={(e) => handleInputChange('printQr', e.target.checked)}
               className="w-4 h-4 text-purple-600 rounded"
             />
-            <span className="text-sm text-gray-700">Print QR</span>
+            <span className="text-base text-gray-700">Print QR</span>
           </label>
         </div>
       </div>
@@ -1136,7 +1136,7 @@ ${settings.footerNote || ''}
         <button
           onClick={saveSettings}
           disabled={isSaving}
-          className="px-6 py-3 bg-purple-600 text-white font-semibold rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="px-6 py-3 bg-purple-600 text-white font-semibold rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-base"
         >
           {isSaving ? 'Saving...' : 'Save Settings'}
         </button>

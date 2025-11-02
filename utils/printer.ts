@@ -78,7 +78,7 @@ export function generateReceiptCommands(data: PrintData): Uint8Array {
   }
   
   console.log('=== GENERATING RECEIPT COMMANDS ===');
-  console.log('Invoice #:', data.invoiceNumber);
+  console.log('Order No:', data.invoiceNumber);
   console.log('Items count:', data.items.length);
   console.log('All items:', data.items.map((item, idx) => `${idx + 1}. ${item.name} x${item.quantity}`));
   
@@ -93,15 +93,15 @@ export function generateReceiptCommands(data: PrintData): Uint8Array {
   chunks.push(commands.setBold(true));
   chunks.push(encode('Tea Time\n'));
   chunks.push(commands.setTextSize(1, 1));
-  chunks.push(encode('Point of Sale\n'));
+  chunks.push(encode('Palace Road Kuppam\n'));
   
-  // Invoice Info - Left aligned (compact, no extra spacing)
+  // Order Info - Left aligned (compact, no extra spacing)
   chunks.push(commands.setAlign('left'));
   chunks.push(commands.setBold(false));
   chunks.push(commands.setTextSize(1, 1));
   chunks.push(encode('--------------------------------\n'));
   chunks.push(commands.setBold(true));
-  chunks.push(encode(`Invoice #: ${data.invoiceNumber}\n`));
+  chunks.push(encode(`Order No: ${data.invoiceNumber}\n`));
   chunks.push(commands.setBold(false));
   chunks.push(encode(`Date: ${data.date} ${data.time}\n`));
   chunks.push(encode('--------------------------------\n'));
@@ -221,7 +221,7 @@ export async function printToSerialPrinter(data: PrintData): Promise<void> {
   }
   
   console.log('=== PRINT TO SERIAL PRINTER ===');
-  console.log('Invoice #:', data.invoiceNumber);
+  console.log('Order No:', data.invoiceNumber);
   console.log('Items to print:', data.items.length);
   console.log('Items:', data.items);
   
@@ -266,9 +266,9 @@ export async function printToSerialPrinter(data: PrintData): Promise<void> {
         await writer.write(chunk);
         offset += chunk.length;
         
-        // Small delay between chunks for reliability (increased slightly for tablets)
-        if (offset < commands.length) {
-          await new Promise(resolve => setTimeout(resolve, 20)); // Increased from 10ms to 20ms
+        // Minimal delay between chunks - only if needed for reliability
+        if (offset < commands.length && commands.length > 512) {
+          await new Promise(resolve => setTimeout(resolve, 5)); // Reduced from 20ms to 5ms
         }
       } catch (chunkError: any) {
         console.error(`Error writing chunk at offset ${offset}:`, chunkError);
@@ -281,8 +281,8 @@ export async function printToSerialPrinter(data: PrintData): Promise<void> {
     // Wait for all data to be flushed to printer
     await writer.ready;
     
-    // Wait for write buffer to be fully sent
-    await new Promise(resolve => setTimeout(resolve, 200)); // Increased delay for tablet reliability
+    // Minimal wait for write buffer to be sent
+    await new Promise(resolve => setTimeout(resolve, 50)); // Reduced from 200ms to 50ms
     
     // Release writer lock (but keep port open for next print)
     writer.releaseLock();
@@ -290,12 +290,10 @@ export async function printToSerialPrinter(data: PrintData): Promise<void> {
     
     console.log('Writer released, waiting for printer to process and cut...');
     
-    // Additional delay to ensure printer fully processes and cuts the paper
-    // Longer delay for tablets which may have slower processing
-    await new Promise(resolve => setTimeout(resolve, 1500)); // Increased from 1000ms to 1500ms for reliability
+    // Reduced delay - printer should process quickly
+    await new Promise(resolve => setTimeout(resolve, 300)); // Reduced from 1500ms to 300ms
     
     console.log('✅ Print job sent and completed successfully');
-    console.log('⚠️ Keeping port open for next print (no selection dialog needed)');
     
     // DON'T close the port - keep it open for reuse
     // This way next print won't show selection dialog
@@ -369,7 +367,7 @@ export function printViaBrowser(data: PrintData, onComplete?: () => void): void 
     <!DOCTYPE html>
     <html>
       <head>
-        <title>Invoice #${data.invoiceNumber}</title>
+        <title>Order No ${data.invoiceNumber}</title>
         <style>
           @page { size: 58mm auto; margin: 0; padding: 0; }
           @media print {
@@ -396,9 +394,9 @@ export function printViaBrowser(data: PrintData, onComplete?: () => void): void 
         </style>
       </head>
       <body>
-        <div class="header"><h1>Tea Time</h1><p>Point of Sale</p></div>
+        <div class="header"><h1>Tea Time</h1><p>Palace Road Kuppam</p></div>
         <div class="invoice-info">
-          <div><span>Invoice #:</span><span>${data.invoiceNumber}</span></div>
+          <div><span>Order No:</span><span>${data.invoiceNumber}</span></div>
           <div><span>Date:</span><span>${data.date} ${data.time}</span></div>
         </div>
         <div class="items">
@@ -543,7 +541,7 @@ async function printToBluetoothPrinter(data: PrintData, printer: BluetoothPrinte
   console.log('=== PRINT TO BLUETOOTH PRINTER ===');
   console.log('Printer:', printer.name);
   console.log('Printer ID:', printer.id);
-  console.log('Invoice #:', data.invoiceNumber);
+  console.log('Order No:', data.invoiceNumber);
 
   let device: BluetoothDevice | null = null;
   
@@ -736,12 +734,13 @@ async function printToBluetoothPrinter(data: PrintData, printer: BluetoothPrinte
     } else {
       await characteristic.writeValue(chunk);
     }
-    if (i + chunkSize < escPosData.length) {
-      await new Promise(resolve => setTimeout(resolve, 50));
+    // Minimal delay - only for large data
+    if (i + chunkSize < escPosData.length && escPosData.length > 100) {
+      await new Promise(resolve => setTimeout(resolve, 20)); // Reduced from 50ms to 20ms
     }
   }
 
-  await new Promise(resolve => setTimeout(resolve, 1000));
+  await new Promise(resolve => setTimeout(resolve, 300)); // Reduced from 1000ms to 300ms
   
   // Don't disconnect - keep connection alive for next print
   // Cache the device for reuse

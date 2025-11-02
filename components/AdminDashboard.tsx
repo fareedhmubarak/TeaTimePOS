@@ -88,55 +88,55 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   return (
-    <main className="flex-1 flex flex-col bg-gray-50">
-        <div className="border-b border-gray-200 bg-white">
+    <main className="flex-1 flex flex-col bg-gray-50 h-full overflow-hidden">
+        <div className="border-b border-gray-200 bg-white flex-shrink-0">
             <div className="flex items-center justify-between px-6 py-2">
                 <nav className="-mb-px flex space-x-8" aria-label="Tabs">
                 <button
                     onClick={() => setActiveTab('reports')}
-                    className={`flex items-center whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'reports' ? 'border-purple-500 text-purple-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
+                    className={`flex items-center whitespace-nowrap py-4 px-1 border-b-2 font-medium text-base ${activeTab === 'reports' ? 'border-purple-500 text-purple-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
                 >
                     <ChartBarIcon className="w-5 h-5 mr-2" />
                     Reports
                 </button>
                 <button
                     onClick={() => setActiveTab('expenses')}
-                    className={`flex items-center whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'expenses' ? 'border-purple-500 text-purple-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
+                    className={`flex items-center whitespace-nowrap py-4 px-1 border-b-2 font-medium text-base ${activeTab === 'expenses' ? 'border-purple-500 text-purple-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
                 >
                     <DocumentTextIcon className="w-5 h-5 mr-2" />
                     Purchases &amp; Expenses
                 </button>
                  <button
                     onClick={() => setActiveTab('items')}
-                    className={`flex items-center whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'items' ? 'border-purple-500 text-purple-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
+                    className={`flex items-center whitespace-nowrap py-4 px-1 border-b-2 font-medium text-base ${activeTab === 'items' ? 'border-purple-500 text-purple-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
                 >
                     <TagIcon className="w-5 h-5 mr-2" />
                     Items
                 </button>
                 <button
                     onClick={() => setActiveTab('expenseItems')}
-                    className={`flex items-center whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'expenseItems' ? 'border-purple-500 text-purple-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
+                    className={`flex items-center whitespace-nowrap py-4 px-1 border-b-2 font-medium text-base ${activeTab === 'expenseItems' ? 'border-purple-500 text-purple-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
                 >
                     <ReceiptIcon className="w-5 h-5 mr-2" />
                     Expense Items
                 </button>
                 <button
                     onClick={() => setActiveTab('database')}
-                    className={`flex items-center whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'database' ? 'border-purple-500 text-purple-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
+                    className={`flex items-center whitespace-nowrap py-4 px-1 border-b-2 font-medium text-base ${activeTab === 'database' ? 'border-purple-500 text-purple-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
                 >
                     <DatabaseIcon className="w-5 h-5 mr-2" />
                     Database
                 </button>
                 <button
                     onClick={() => setActiveTab('printer')}
-                    className={`flex items-center whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'printer' ? 'border-purple-500 text-purple-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
+                    className={`flex items-center whitespace-nowrap py-4 px-1 border-b-2 font-medium text-base ${activeTab === 'printer' ? 'border-purple-500 text-purple-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
                 >
                     <PrinterIcon className="w-5 h-5 mr-2" />
                     Printer
                 </button>
                 <button
                     onClick={() => setActiveTab('categories')}
-                    className={`flex items-center whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'categories' ? 'border-purple-500 text-purple-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
+                    className={`flex items-center whitespace-nowrap py-4 px-1 border-b-2 font-medium text-base ${activeTab === 'categories' ? 'border-purple-500 text-purple-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
                 >
                     <MenuIcon className="w-5 h-5 mr-2" />
                     Categories
@@ -176,7 +176,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </div>
             </div>
         </div>
-        <div className="flex-1 p-4 sm:p-6 overflow-y-auto">
+        <div className="flex-1 p-4 sm:p-6 overflow-y-auto min-h-0">
             {renderView()}
         </div>
     </main>

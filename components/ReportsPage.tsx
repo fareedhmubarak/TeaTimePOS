@@ -68,26 +68,26 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ billedItems, expenses, stockE
     const renderDateSelectors = () => {
         if (reportType === 'range') {
              return (
-                <div className="flex items-center space-x-2 text-sm">
-                    <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="p-1 border bg-gray-50 rounded-md" />
+                <div className="flex items-center space-x-2 text-base">
+                    <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="p-1.5 border bg-gray-50 rounded-md text-base" />
                     <span className="text-gray-600">to</span>
-                    <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="p-1 border bg-gray-50 rounded-md" />
+                    <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="p-1.5 border bg-gray-50 rounded-md text-base" />
                 </div>
             );
         }
         
         // Daily and Monthly both use the single date picker
         return (
-            <div className="flex items-center space-x-2 text-sm text-gray-700 font-medium">
+            <div className="flex items-center space-x-2 text-base text-gray-700 font-medium">
                 <span>Date:</span>
                 <div className="relative">
                     <input 
                         type="date" 
                         value={selectedDate} 
                         onChange={e => setSelectedDate(e.target.value)} 
-                        className="p-1 pl-2 pr-8 border bg-gray-50 rounded-md" 
+                        className="p-1.5 pl-2 pr-8 border bg-gray-50 rounded-md text-base" 
                     />
-                    <CalendarIcon className="w-4 h-4 absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+                    <CalendarIcon className="w-5 h-5 absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
                 </div>
             </div>
         );
@@ -97,9 +97,9 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ billedItems, expenses, stockE
         <div className="space-y-6">
             <div className="bg-white p-3 rounded-lg shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-3 sm:space-y-0">
                 <div className="flex items-center border border-gray-200 rounded-lg p-1 space-x-1">
-                    <button onClick={() => setReportType('daily')} className={`px-4 py-1.5 text-sm font-bold rounded-md transition-colors ${reportType === 'daily' ? 'bg-purple-600 text-white shadow' : 'text-gray-600 hover:bg-gray-100'}`}>Daily</button>
-                    <button onClick={() => setReportType('monthly')} className={`px-4 py-1.5 text-sm font-bold rounded-md transition-colors ${reportType === 'monthly' ? 'bg-purple-600 text-white shadow' : 'text-gray-600 hover:bg-gray-100'}`}>Monthly</button>
-                    <button onClick={() => setReportType('range')} className={`px-4 py-1.5 text-sm font-bold rounded-md transition-colors ${reportType === 'range' ? 'bg-purple-600 text-white shadow' : 'text-gray-600 hover:bg-gray-100'}`}>Date Range</button>
+                    <button onClick={() => setReportType('daily')} className={`px-4 py-1.5 text-base font-bold rounded-md transition-colors ${reportType === 'daily' ? 'bg-purple-600 text-white shadow' : 'text-gray-600 hover:bg-gray-100'}`}>Daily</button>
+                    <button onClick={() => setReportType('monthly')} className={`px-4 py-1.5 text-base font-bold rounded-md transition-colors ${reportType === 'monthly' ? 'bg-purple-600 text-white shadow' : 'text-gray-600 hover:bg-gray-100'}`}>Monthly</button>
+                    <button onClick={() => setReportType('range')} className={`px-4 py-1.5 text-base font-bold rounded-md transition-colors ${reportType === 'range' ? 'bg-purple-600 text-white shadow' : 'text-gray-600 hover:bg-gray-100'}`}>Date Range</button>
                 </div>
                 <div>
                     {renderDateSelectors()}
@@ -114,6 +114,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ billedItems, expenses, stockE
                 startDate={finalStartDate}
                 endDate={finalEndDate}
                 title={title}
+                reportType={reportType}
             />
         </div>
     );

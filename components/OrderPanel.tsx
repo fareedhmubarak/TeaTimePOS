@@ -151,19 +151,19 @@ const OrderPanel: React.FC<OrderPanelProps> = ({
 
   return (
     <aside className={asideClasses}>
-      <div className="p-2 border-b border-gray-200 space-y-2 flex-shrink-0">
+      <div className="p-3 border-b border-gray-200 space-y-2 flex-shrink-0">
         <div className="flex justify-between items-start">
-          <h2 className="text-lg font-bold text-gray-800">
+          <h2 className="text-xl font-bold text-gray-800">
               {isReadOnly ? 'Invoice' : (isEditing ? 'Editing' : 'Invoice')} #{isPending ? `${invoiceNumber * -1}`.slice(-4) : invoiceNumber}
-              {isPending && <span className="text-xs font-normal text-gray-500 ml-1">(Saving...)</span>}
+              {isPending && <span className="text-sm font-normal text-gray-500 ml-1">(Saving...)</span>}
           </h2>
           <div className="flex items-center space-x-1 flex-shrink-0">
             {isReadOnly && !isPending && isTodayInvoice && (
               <>
-                <button onClick={onEditInvoice} className="text-xs font-medium text-purple-600 hover:text-purple-800 px-1">
+                <button onClick={onEditInvoice} className="text-sm font-medium text-purple-600 hover:text-purple-800 px-1">
                   Edit
                 </button>
-                <button onClick={onDeleteInvoice} className="text-xs font-medium text-red-600 hover:text-red-800 px-1">
+                <button onClick={onDeleteInvoice} className="text-sm font-medium text-red-600 hover:text-red-800 px-1">
                   Delete
                 </button>
               </>
@@ -171,24 +171,24 @@ const OrderPanel: React.FC<OrderPanelProps> = ({
             {isReadOnly && !isPending && (
               <button 
                 onClick={handlePrint} 
-                className="text-xs font-medium text-blue-600 hover:text-blue-800 flex items-center space-x-1 px-1"
+                className="text-sm font-medium text-blue-600 hover:text-blue-800 flex items-center space-x-1 px-1"
                 title="Print Receipt"
               >
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
                 </svg>
                 <span>Print</span>
               </button>
             )}
-            {!isReadOnly && <button onClick={onClearOrder} className="text-xs font-medium text-red-500 hover:text-red-700 px-1">Clear</button>}
+            {!isReadOnly && <button onClick={onClearOrder} className="text-sm font-medium text-red-500 hover:text-red-700 px-1">Clear</button>}
             <button onClick={onMobileClose} className="p-1 text-gray-500 hover:text-gray-800 md:hidden" aria-label="Close order panel">
-                <XIcon className="w-4 h-4" />
+                <XIcon className="w-5 h-5" />
             </button>
           </div>
         </div>
         
         <div>
-          <label htmlFor="billing-date" className="text-xs font-medium text-gray-600">Billing Date</label>
+          <label htmlFor="billing-date" className="text-sm font-medium text-gray-600">Billing Date</label>
           <input
               type="date"
               id="billing-date"
@@ -198,14 +198,14 @@ const OrderPanel: React.FC<OrderPanelProps> = ({
                   onBillingDateChange(new Date(year, month - 1, day, 12, 0, 0));
               }}
               disabled={isReadOnly || isEditing}
-              className="block w-full bg-gray-50 border border-gray-300 rounded-md py-1 px-2 text-xs disabled:bg-gray-200 disabled:cursor-not-allowed"
+              className="block w-full bg-gray-50 border border-gray-300 rounded-md py-1.5 px-2 text-sm disabled:bg-gray-200 disabled:cursor-not-allowed"
           />
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-2 min-h-0">
+      <div className="flex-1 overflow-y-auto p-3 min-h-0">
         {order.items.length === 0 ? (
-          <div className="h-full flex items-center justify-center text-gray-500 text-xs">
+          <div className="h-full flex items-center justify-center text-gray-500 text-base">
             This order is empty
           </div>
         ) : (
@@ -223,11 +223,11 @@ const OrderPanel: React.FC<OrderPanelProps> = ({
         )}
       </div>
 
-      <div className="p-2 border-t border-gray-200 bg-gray-50 flex-shrink-0">
+      <div className="p-3 border-t border-gray-200 bg-gray-50 flex-shrink-0">
         <div className="space-y-1 mb-2">
             <div className="flex justify-between items-center">
-              <span className="text-sm font-bold">Total Amount</span>
-              <span className="text-xl font-bold text-purple-900">₹{totalAmount.toFixed(2)}</span>
+              <span className="text-base font-bold">Total Amount</span>
+              <span className="text-2xl font-bold text-purple-900">₹{totalAmount.toFixed(2)}</span>
             </div>
         </div>
 
@@ -236,13 +236,13 @@ const OrderPanel: React.FC<OrderPanelProps> = ({
                 <button
                     onClick={onHoldOrder}
                     disabled={!canHold || isEditing}
-                    className="w-1/2 py-2 bg-red-500 text-white rounded-md text-sm font-semibold hover:bg-red-600 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+                    className="w-1/2 py-3 bg-red-500 text-white rounded-md text-base font-semibold hover:bg-red-600 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
                 >
                     {isEditing ? 'Update First' : (canHold ? 'Hold' : 'Hold Full')}
                 </button>
                 <button 
                     onClick={onBillOrder}
-                    className="w-1/2 py-2 bg-purple-800 text-white rounded-md text-sm font-semibold hover:bg-purple-900"
+                    className="w-1/2 py-3 bg-purple-800 text-white rounded-md text-base font-semibold hover:bg-purple-900"
                 >
                     {isEditing ? 'Update Bill' : 'Bill'}
                 </button>
@@ -252,12 +252,12 @@ const OrderPanel: React.FC<OrderPanelProps> = ({
           <button
             onClick={handlePrint}
             disabled={isPrinting}
-            className="w-full py-2 bg-blue-600 text-white rounded-md text-sm font-semibold hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed flex items-center justify-center space-x-2 transition-colors"
+            className="w-full py-3 bg-blue-600 text-white rounded-md text-base font-semibold hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed flex items-center justify-center space-x-2 transition-colors"
             title="Print Invoice"
           >
             {isPrinting ? (
               <>
-                <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
@@ -265,7 +265,7 @@ const OrderPanel: React.FC<OrderPanelProps> = ({
               </>
             ) : (
               <>
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
                 </svg>
                 <span>Print Invoice</span>

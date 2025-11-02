@@ -353,9 +353,9 @@ const DatabaseManagementPage: React.FC<DatabaseManagementPageProps> = ({ onNavig
         <div className="space-y-6">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-3 sm:space-y-0">
                 <div>
-                    <h1 className="text-3xl font-bold text-gray-800">Database Management</h1>
+                    <h1 className="text-xl font-bold text-gray-800">Database Management</h1>
                     {sortConfig && (
-                        <p className="text-sm text-gray-600 mt-1">
+                        <p className="text-base text-gray-600 mt-1">
                             Sorted by: <span className="font-semibold">{sortConfig.key}</span> ({sortConfig.direction})
                         </p>
                     )}
@@ -364,12 +364,12 @@ const DatabaseManagementPage: React.FC<DatabaseManagementPageProps> = ({ onNavig
                     <select
                         value={selectedTable}
                         onChange={(e) => setSelectedTable(e.target.value)}
-                        className="bg-white border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-purple-500 focus:border-purple-500"
+                        className="bg-white border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-purple-500 focus:border-purple-500 text-base"
                         disabled={loading}
                     >
                         {tables.map(table => <option key={table} value={table}>{table}</option>)}
                     </select>
-                     <button onClick={() => setModalState({ isOpen: true, data: null })} className="flex items-center bg-purple-600 text-white font-semibold py-2 px-4 rounded-lg shadow hover:bg-purple-700 transition-colors disabled:bg-gray-400" disabled={!selectedTable || loading}>
+                     <button onClick={() => setModalState({ isOpen: true, data: null })} className="flex items-center bg-purple-600 text-white font-semibold py-2.5 px-5 rounded-lg shadow hover:bg-purple-700 transition-colors disabled:bg-gray-400 text-base" disabled={!selectedTable || loading}>
                         <PlusIcon className="w-5 h-5 mr-2" />
                         Add Row
                     </button>
@@ -387,13 +387,13 @@ const DatabaseManagementPage: React.FC<DatabaseManagementPageProps> = ({ onNavig
                             placeholder={`Search all columns in ${selectedTable || 'table'}...`}
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            className="block w-full bg-white border border-gray-300 rounded-md py-2 pl-10 pr-4"
+                            className="block w-full bg-white border border-gray-300 rounded-md py-2.5 pl-10 pr-4 text-base"
                             disabled={!selectedTable || loading}
                         />
                     </div>
                     <button
                         onClick={() => setShowFilters(!showFilters)}
-                        className={`px-4 py-2 rounded-md border transition-colors whitespace-nowrap ${
+                        className={`px-4 py-2 rounded-md border transition-colors whitespace-nowrap text-base ${
                             showFilters 
                                 ? 'bg-purple-600 text-white border-purple-600' 
                                 : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
@@ -407,7 +407,7 @@ const DatabaseManagementPage: React.FC<DatabaseManagementPageProps> = ({ onNavig
                         {sortConfig && (
                             <button
                                 onClick={() => setSortConfig(null)}
-                                className="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 transition-colors text-sm whitespace-nowrap"
+                                className="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 transition-colors text-base whitespace-nowrap"
                                 title={`Clear sort (currently sorting by ${sortConfig.key} ${sortConfig.direction})`}
                             >
                                 Clear Sort
@@ -416,7 +416,7 @@ const DatabaseManagementPage: React.FC<DatabaseManagementPageProps> = ({ onNavig
                         {Object.keys(columnFilters).some(key => columnFilters[key].trim() !== '') && (
                             <button
                                 onClick={() => setColumnFilters({})}
-                                className="px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors text-sm whitespace-nowrap"
+                                className="px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors text-base whitespace-nowrap"
                             >
                                 Clear Filters
                             </button>
@@ -426,16 +426,16 @@ const DatabaseManagementPage: React.FC<DatabaseManagementPageProps> = ({ onNavig
                 
                 {showFilters && columns.length > 0 && (
                     <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                        <h3 className="text-sm font-semibold text-gray-700 mb-3">Column Filters</h3>
+                        <h3 className="text-base font-semibold text-gray-700 mb-3">Column Filters</h3>
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                             {columns.map(col => {
                                 const columnType = detectColumnType(col, tableData);
                                 
                                 return (
                                     <div key={col} className="flex flex-col">
-                                        <label className="text-xs font-medium text-gray-600 mb-1">
+                                        <label className="text-sm font-medium text-gray-600 mb-1">
                                             {col}
-                                            <span className="ml-1 text-xs text-gray-400">({columnType})</span>
+                                            <span className="ml-1 text-sm text-gray-400">({columnType})</span>
                                         </label>
                                         
                                         {columnType === 'date' && (
@@ -446,7 +446,7 @@ const DatabaseManagementPage: React.FC<DatabaseManagementPageProps> = ({ onNavig
                                                     ...prev,
                                                     [col]: e.target.value
                                                 }))}
-                                                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                                                className="w-full px-3 py-2 text-base border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                                             />
                                         )}
                                         
@@ -459,7 +459,7 @@ const DatabaseManagementPage: React.FC<DatabaseManagementPageProps> = ({ onNavig
                                                     ...prev,
                                                     [col]: e.target.value
                                                 }))}
-                                                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                                                className="w-full px-3 py-2 text-base border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                                                 step="any"
                                             />
                                         )}
@@ -471,7 +471,7 @@ const DatabaseManagementPage: React.FC<DatabaseManagementPageProps> = ({ onNavig
                                                     ...prev,
                                                     [col]: e.target.value
                                                 }))}
-                                                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-white"
+                                                className="w-full px-3 py-2 text-base border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-white"
                                             >
                                                 <option value="">All</option>
                                                 <option value="true">True</option>
@@ -488,7 +488,7 @@ const DatabaseManagementPage: React.FC<DatabaseManagementPageProps> = ({ onNavig
                                                     ...prev,
                                                     [col]: e.target.value
                                                 }))}
-                                                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                                                className="w-full px-3 py-2 text-base border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                                             />
                                         )}
                                     </div>
@@ -504,14 +504,14 @@ const DatabaseManagementPage: React.FC<DatabaseManagementPageProps> = ({ onNavig
 
             {!loading && !error && selectedTable && columns.length > 0 && (
                 <div className="space-y-4">
-                    <div className="flex justify-between items-center text-sm text-gray-600">
+                    <div className="flex justify-between items-center text-base text-gray-600">
                         <div>
                             Showing <span className="font-semibold">{paginatedData.length}</span> of <span className="font-semibold">{sortedData.length}</span> results
                             {tableData.length !== sortedData.length && (
                                 <span> (filtered from <span className="font-semibold">{tableData.length}</span> total rows)</span>
                             )}
                         </div>
-                        <div className="text-gray-500 text-xs">
+                        <div className="text-gray-500 text-sm">
                             💡 Click column headers to sort • Use filters above to filter data
                         </div>
                     </div>

@@ -11,16 +11,16 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onAddItem, quantityI
   return (
     <div
       onClick={() => onAddItem(product)}
-      className={`relative group bg-white rounded-lg border-2 cursor-pointer transition-all duration-200 hover:shadow-lg hover:border-purple-500 ${quantityInCart > 0 ? 'border-purple-800 shadow-md' : 'border-gray-200'}`}
+      className={`relative group bg-white rounded-lg border-2 cursor-pointer transition-all duration-200 hover:shadow-lg hover:border-purple-500 ${quantityInCart > 0 ? 'border-purple-800 shadow-md' : 'border-gray-200'} flex flex-col`}
     >
-      {product.imageUrl ? (
-        <img src={product.imageUrl} alt={product.name} className="w-full h-36 object-contain rounded-t-lg p-2" />
-      ) : (
-        <div className="w-full h-36 bg-gray-100 flex items-center justify-center rounded-t-lg">
-            <span className="text-gray-400 text-sm">No Image</span>
-        </div>
-      )}
-      <div className="p-3 text-center">
+      <div className="aspect-[16/9] w-full overflow-hidden rounded-t-lg p-1 flex items-center justify-center bg-gray-50">
+        {product.imageUrl ? (
+          <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover" />
+        ) : (
+          <span className="text-gray-400 text-xs">No Image</span>
+        )}
+      </div>
+      <div className="p-3 text-center flex-shrink-0">
         <h3 className="text-base font-bold truncate leading-tight">{product.name}</h3>
         <p className="text-sm text-gray-600 mt-1 font-semibold">₹{product.price}</p>
       </div>

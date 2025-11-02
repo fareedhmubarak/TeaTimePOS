@@ -16,11 +16,13 @@ let orderCounter = 1;
 
 // --- Data Mapping Functions ---
 const mapInvoiceToBilledItems = (invoice: any, dailyInvoiceNumber: number): BilledItem[] => {
-    // Use bill_date if available for accuracy, otherwise fallback to created_at
+    // Use bill_date for display date if available, otherwise use created_at
     const recordDate = invoice.bill_date ? new Date(invoice.bill_date) : new Date(invoice.created_at);
-    // Adjust for timezone if parsing from a simple date string like 'YYYY-MM-DD'
-    const timestamp = recordDate.getTime() + (invoice.bill_date ? recordDate.getTimezoneOffset() * 60000 : 0);
-    const date = new Date(timestamp).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' });
+    const date = recordDate.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' });
+    
+    // Always use created_at for timestamp to preserve the actual order time (for charts)
+    // bill_date is typically DATE type (date-only) which defaults to midnight
+    const timestamp = new Date(invoice.created_at).getTime();
     
     return (invoice.invoice_items || []).map((item: any) => ({
         invoiceNumber: dailyInvoiceNumber, // Use daily invoice number instead of database ID
@@ -30,7 +32,7 @@ const mapInvoiceToBilledItems = (invoice: any, dailyInvoiceNumber: number): Bill
         price: item.price_per_item * item.quantity,
         profit: item.profit_per_item * item.quantity,
         date: date,
-        timestamp: timestamp,
+        timestamp: timestamp, // Use created_at timestamp to preserve time component
         status: 'synced',
     }));
 };
@@ -654,7 +656,7 @@ const App: React.FC = () => {
     // This combines the user-selected date with the current time for the timestamp.
     const timestamp = new Date(billingDate).setHours(new Date().getHours(), new Date().getMinutes(), new Date().getSeconds());
 
-    // 1. Optimistic UI Update
+    // 1. Optimistic UI Update - Show modal immediately
     const newBilledItems: BilledItem[] = itemsToBill.map(item => ({
       invoiceNumber: dailyInvoiceNumber,
       productName: item.product.name,
@@ -667,6 +669,20 @@ const App: React.FC = () => {
     }));
   
     setBilledItems(prev => [...newBilledItems, ...prev]);
+    
+    // Show order placed modal IMMEDIATELY (before database sync)
+    const totalAmount = itemsToBill.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
+    const itemsForPrint = itemsToBill.map(item => ({
+      name: String(item.product.name || ''),
+      quantity: Number(item.quantity || 0),
+      price: Number((item.product.price * item.quantity).toFixed(2))
+    }));
+    
+    setOrderPlacedInfo({ 
+      invoiceNumber: dailyInvoiceNumber, 
+      totalAmount: Number(totalAmount.toFixed(2)),
+      items: [...itemsForPrint]
+    });
   
     const isLastOrder = activeOrderIndex === orders.length - 1;
     if (orders.length > 1 && !isLastOrder) {
@@ -677,15 +693,20 @@ const App: React.FC = () => {
       handleClearOrder();
     }
   
-    // 2. Background Database Sync
+    // 2. Background Database Sync (non-blocking - runs in background)
     let newInvoiceId: number | null = null;
     try {
-      // Fetch current product IDs to avoid foreign key errors on deleted products
-      const { data: currentProductsData, error: productFetchError } = await supabase.from('products').select('id');
-      if (productFetchError) {
-        throw new Error(`Could not verify products before billing: ${productFetchError.message}`);
+      // Optimized: Only fetch product IDs if we have products with IDs > 0
+      const hasProductsWithIds = itemsToBill.some(item => item.product.id > 0);
+      let productIdsInDB = new Set<number>();
+      
+      if (hasProductsWithIds) {
+        const { data: currentProductsData, error: productFetchError } = await supabase.from('products').select('id');
+        if (productFetchError) {
+          throw new Error(`Could not verify products before billing: ${productFetchError.message}`);
+        }
+        productIdsInDB = new Set((currentProductsData || []).map(p => p.id));
       }
-      const productIdsInDB = new Set((currentProductsData || []).map(p => p.id));
 
       const total_amount = itemsToBill.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
       const total_profit = itemsToBill.reduce((sum, item) => sum + item.product.profit * item.quantity, 0);
@@ -742,33 +763,6 @@ const App: React.FC = () => {
             : item
         )
       );
-      
-      // 4. Show order placed modal - DO THIS BEFORE ANY OTHER OPERATIONS
-      const totalAmount = itemsToBill.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
-      // Create a fresh array copy to avoid any reference issues
-      const itemsForPrint = itemsToBill.map(item => ({
-        name: String(item.product.name || ''),
-        quantity: Number(item.quantity || 0),
-        price: Number((item.product.price * item.quantity).toFixed(2))
-      }));
-      
-      console.log('=== NEW ORDER PLACED ===');
-      console.log('Invoice Number:', dailyInvoiceNumber);
-      console.log('Items to print:', itemsForPrint);
-      console.log('Items count:', itemsForPrint.length);
-      console.log('Total Amount:', totalAmount);
-      console.log('Setting orderPlacedInfo state...');
-      
-      // Use regular state update (not functional) to ensure React sees the change
-      const orderInfo = { 
-        invoiceNumber: dailyInvoiceNumber, 
-        totalAmount: Number(totalAmount.toFixed(2)),
-        items: [...itemsForPrint] // Create a new array copy
-      };
-      
-      console.log('Order info to set:', orderInfo);
-      setOrderPlacedInfo(orderInfo);
-      console.log('orderPlacedInfo state set. Modal should appear now.');
     } catch (err: any) {
       // 4. Sync Failure: Rollback and Revert UI
       console.error("Optimistic billing failed:", err);

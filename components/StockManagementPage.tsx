@@ -41,8 +41,8 @@ const StockManagementPage: React.FC<StockManagementPageProps> = ({ stockEntries,
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center">
-                <h1 className="text-3xl font-bold text-gray-800">Purchases &amp; Expenses</h1>
-                <button onClick={openAddModal} className="flex items-center bg-purple-600 text-white font-semibold py-2 px-4 rounded-lg shadow hover:bg-purple-700 transition-colors">
+                <h1 className="text-xl font-bold text-gray-800">Purchases &amp; Expenses</h1>
+                <button onClick={openAddModal} className="flex items-center bg-purple-600 text-white font-semibold py-2.5 px-5 rounded-lg shadow hover:bg-purple-700 transition-colors text-base">
                     <PlusIcon className="w-5 h-5 mr-2" />
                     Add New Purchase
                 </button>
@@ -50,8 +50,8 @@ const StockManagementPage: React.FC<StockManagementPageProps> = ({ stockEntries,
 
             <div className="bg-white shadow-md rounded-lg overflow-hidden">
                 <div className="max-h-[70vh] overflow-y-auto">
-                    <table className="w-full text-sm text-left text-gray-500">
-                        <thead className="text-xs text-gray-700 uppercase bg-gray-100 sticky top-0">
+                    <table className="w-full text-base text-left text-gray-500">
+                        <thead className="text-sm text-gray-700 uppercase bg-gray-100 sticky top-0">
                             <tr>
                                 <th scope="col" className="px-2 py-3 w-12"></th>
                                 <th scope="col" className="px-6 py-3">Date</th>
@@ -70,7 +70,7 @@ const StockManagementPage: React.FC<StockManagementPageProps> = ({ stockEntries,
                                             <td className="px-2 py-4">
                                                 {(entry.items || []).length > 0 && (
                                                     <button className="p-1 rounded-full hover:bg-gray-200">
-                                                        {isExpanded ? <ChevronDownIcon className="w-4 h-4 text-gray-600" /> : <ChevronRightIcon className="w-4 h-4 text-gray-600" />}
+                                                        {isExpanded ? <ChevronDownIcon className="w-5 h-5 text-gray-600" /> : <ChevronRightIcon className="w-5 h-5 text-gray-600" />}
                                                     </button>
                                                 )}
                                             </td>
@@ -79,17 +79,17 @@ const StockManagementPage: React.FC<StockManagementPageProps> = ({ stockEntries,
                                             <td className="px-6 py-4 text-right font-semibold text-red-600">₹{(entry.totalCost || 0).toFixed(2)}</td>
                                             <td className="px-6 py-4 text-center">
                                                 {entry.billImageUrl ? 
-                                                    <a href={entry.billImageUrl} target="_blank" rel="noopener noreferrer" className="text-purple-600 hover:underline text-xs" onClick={e => e.stopPropagation()}>View</a> : 
-                                                    <span className="text-gray-400 text-xs">None</span>
+                                                    <a href={entry.billImageUrl} target="_blank" rel="noopener noreferrer" className="text-purple-600 hover:underline text-sm" onClick={e => e.stopPropagation()}>View</a> : 
+                                                    <span className="text-gray-400 text-sm">None</span>
                                                 }
                                             </td>
                                             <td className="px-6 py-4" onClick={e => e.stopPropagation()}>
                                                 <div className="flex justify-center items-center space-x-2">
                                                     <button onClick={() => openEditModal(entry)} className="p-2 text-blue-600 hover:bg-blue-100 rounded-full">
-                                                        <PencilIcon className="w-4 h-4"/>
+                                                        <PencilIcon className="w-5 h-5"/>
                                                     </button>
                                                     <button onClick={() => onDeleteStockEntry(entry.id)} className="p-2 text-red-600 hover:bg-red-100 rounded-full">
-                                                        <TrashIcon className="w-4 h-4"/>
+                                                        <TrashIcon className="w-5 h-5"/>
                                                     </button>
                                                 </div>
                                             </td>
@@ -98,8 +98,8 @@ const StockManagementPage: React.FC<StockManagementPageProps> = ({ stockEntries,
                                             <tr className="bg-gray-50">
                                                 <td colSpan={6} className="p-0">
                                                     <div className="p-4">
-                                                        <h4 className="font-bold text-gray-700 mb-2">Details</h4>
-                                                        <table className="w-full text-xs">
+                                                        <h4 className="font-bold text-gray-700 mb-2 text-base">Details</h4>
+                                                        <table className="w-full text-sm">
                                                             <thead className="bg-gray-200">
                                                                 <tr>
                                                                     <th className="px-4 py-2 text-left">Item Name</th>
@@ -127,7 +127,7 @@ const StockManagementPage: React.FC<StockManagementPageProps> = ({ stockEntries,
                                 );
                             })}
                              {stockEntries.length === 0 && (
-                                <tr><td colSpan={6} className="text-center py-8 text-gray-500">No purchase entries found.</td></tr>
+                                <tr><td colSpan={6} className="text-center py-8 text-gray-500 text-base">No purchase entries found.</td></tr>
                             )}
                         </tbody>
                     </table>
