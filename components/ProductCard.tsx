@@ -11,21 +11,21 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onAddItem, quantityI
   return (
     <div
       onClick={() => onAddItem(product)}
-      className={`relative group bg-white rounded border cursor-pointer transition-all duration-200 hover:shadow-md hover:border-purple-500 ${quantityInCart > 0 ? 'border-purple-800 shadow-sm' : 'border-gray-200'}`}
+      className={`relative group bg-white rounded-lg border-2 cursor-pointer transition-all duration-200 hover:shadow-lg hover:border-purple-500 ${quantityInCart > 0 ? 'border-purple-800 shadow-md' : 'border-gray-200'}`}
     >
       {product.imageUrl ? (
-        <img src={product.imageUrl} alt={product.name} className="w-full h-20 object-contain rounded-t p-1" />
+        <img src={product.imageUrl} alt={product.name} className="w-full h-36 object-contain rounded-t-lg p-2" />
       ) : (
-        <div className="w-full h-20 bg-gray-100 flex items-center justify-center rounded-t">
-            <span className="text-gray-400 text-xs">No Image</span>
+        <div className="w-full h-36 bg-gray-100 flex items-center justify-center rounded-t-lg">
+            <span className="text-gray-400 text-sm">No Image</span>
         </div>
       )}
-      <div className="p-1.5 text-center">
-        <h3 className="text-xs font-semibold truncate leading-tight">{product.name}</h3>
-        <p className="text-xs text-gray-600 mt-0.5">₹{product.price}</p>
+      <div className="p-3 text-center">
+        <h3 className="text-base font-bold truncate leading-tight">{product.name}</h3>
+        <p className="text-sm text-gray-600 mt-1 font-semibold">₹{product.price}</p>
       </div>
       {quantityInCart > 0 && (
-          <div className="absolute top-0.5 right-0.5 bg-purple-800 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
+          <div className="absolute top-2 right-2 bg-purple-800 text-white text-sm font-bold rounded-full h-7 w-7 flex items-center justify-center shadow-md">
               {quantityInCart}
           </div>
       )}
