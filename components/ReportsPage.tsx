@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { BilledItem, Expense, StockEntry, ExpenseItem } from '../types.ts';
 import ReportView from './ReportView.tsx';
 import { CalendarIcon } from './Icons.tsx';
@@ -65,6 +65,38 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ billedItems, expenses, stockE
         }
     }, [reportType, selectedDate, startDate, endDate]);
 
+    // Custom date input to show single clickable icon while hiding the native one
+    const DateInput: React.FC<{ value: string; onChange: (v: string) => void }> = ({ value, onChange }) => {
+        const inputRef = useRef<HTMLInputElement>(null);
+        const openPicker = () => {
+            const el = inputRef.current;
+            if (!el) return;
+            // Prefer showPicker when available (Chrome), fallback to focus
+            // @ts-ignore
+            if (typeof el.showPicker === 'function') {
+                // @ts-ignore
+                el.showPicker();
+            } else {
+                el.focus();
+                el.click();
+            }
+        };
+        return (
+            <div className="relative">
+                <input
+                    ref={inputRef}
+                    type="date"
+                    value={value}
+                    onChange={e => onChange(e.target.value)}
+                    className="p-1.5 pl-2 pr-9 border bg-gray-50 rounded-md text-base appearance-none [&::-webkit-calendar-picker-indicator]:hidden"
+                />
+                <button type="button" onClick={openPicker} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-purple-700">
+                    <CalendarIcon className="w-5 h-5" />
+                </button>
+            </div>
+        );
+    };
+
     const renderDateSelectors = () => {
         if (reportType === 'range') {
              return (
@@ -80,15 +112,7 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ billedItems, expenses, stockE
         return (
             <div className="flex items-center space-x-2 text-base text-gray-700 font-medium">
                 <span>Date:</span>
-                <div className="relative">
-                    <input 
-                        type="date" 
-                        value={selectedDate} 
-                        onChange={e => setSelectedDate(e.target.value)} 
-                        className="p-1.5 pl-2 pr-8 border bg-gray-50 rounded-md text-base" 
-                    />
-                    <CalendarIcon className="w-5 h-5 absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
-                </div>
+                <DateInput value={selectedDate} onChange={setSelectedDate} />
             </div>
         );
     };

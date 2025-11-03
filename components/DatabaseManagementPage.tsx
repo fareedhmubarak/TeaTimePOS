@@ -276,16 +276,25 @@ const DatabaseManagementPage: React.FC<DatabaseManagementPageProps> = ({ onNavig
                     if (cellValue instanceof Date) {
                         cellDateStr = cellValue.toISOString().split('T')[0];
                     } else if (typeof cellValue === 'string') {
-                        // Handle ISO datetime strings
+                        // Handle ISO datetime strings (includes timezone)
                         if (cellValue.includes('T')) {
-                            cellDateStr = cellValue.split('T')[0];
+                            // For TIMESTAMPTZ fields, extract date part correctly
+                            // Parse as UTC to avoid timezone issues
+                            const dateObj = new Date(cellValue);
+                            // Convert to UTC date string to ensure correct comparison
+                            cellDateStr = dateObj.toISOString().split('T')[0];
+                        } else if (cellValue.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                            // Already a date string (YYYY-MM-DD) - for DATE columns like bill_date
+                            cellDateStr = cellValue;
                         } else {
+                            // Try to parse other date formats
                             cellDateStr = cellValue.split(' ')[0];
                         }
                     } else {
                         return false;
                     }
                     
+                    // Compare dates - this handles timezone correctly for TIMESTAMPTZ
                     return cellDateStr === filterDate;
                 }
                 

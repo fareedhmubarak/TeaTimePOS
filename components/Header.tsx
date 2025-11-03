@@ -56,7 +56,7 @@ const Header: React.FC<HeaderProps> = ({
     return Object.entries(invoices)
         .map(([invoiceNumber, data]) => ({ invoiceNumber: parseInt(invoiceNumber), ...data }))
         .sort((a, b) => b.timestamp - a.timestamp) // Sort by timestamp for true recency
-        .slice(0, 10);
+        .slice(0, 15);
   }, [billedItems]);
   
   const heldOrderIndices = orders

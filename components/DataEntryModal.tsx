@@ -68,8 +68,7 @@ const DataEntryModal: React.FC<DataEntryModalProps> = ({ isOpen, onClose, onSave
 
                     const { data, error } = await supabase
                         .from(targetTable)
-                        .select('id, name, title, description, primary_description')
-                        .limit(1000);
+                        .select('id, name, title, description, primary_description');
 
                     if (data) {
                         const options = data.map(item => ({

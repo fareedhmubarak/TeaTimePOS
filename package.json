@@ -11,6 +11,7 @@
     "ngrok": "node ngrok.js",
     "ngrok:5175": "node ngrok.js 5175",
     "tunnel": "npm run ngrok",
+    "dev:tunnel": "node start-dev-with-ngrok.js 5175",
     "cap:init": "cap init -y",
     "cap:sync": "cap sync",
     "cap:add:android": "cap add android",

@@ -1,8 +1,9 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { BilledItem, Expense, StockEntry, ExpenseItem } from '../types.ts';
 import OrdersByTimeChart from './OrdersByTimeChart.tsx';
-import ItemsSoldChart from './ItemsSoldChart.tsx';
+import RevenueByHourChart from './RevenueByHourChart.tsx';
 import ExpenseDetailModal from './ExpenseDetailModal.tsx';
+import { supabase } from '../supabaseClient.ts';
 
 interface ReportViewProps {
   billedItems: BilledItem[];
@@ -32,30 +33,158 @@ const ReportView: React.FC<ReportViewProps> = ({ billedItems, expenses, stockEnt
     const [typeFilter, setTypeFilter] = useState<'both' | 'Daily' | 'Monthly' | 'Purchase'>('both');
     const [descriptionFilter, setDescriptionFilter] = useState<string>('all');
     const [productNameFilter, setProductNameFilter] = useState<string>('all');
+    const [itemForOrdersChart, setItemForOrdersChart] = useState<string>('all');
+    const [invoiceCount, setInvoiceCount] = useState<number>(0);
+
+    // Fetch invoice count directly from database for accurate counting
+    useEffect(() => {
+        const fetchInvoiceCount = async () => {
+            try {
+                // Parse dates from M/D/YYYY format (from ReportsPage) or YYYY-MM-DD format
+                let reportStart: Date;
+                let reportEnd: Date;
+                
+                // Check if date is in M/D/YYYY format
+                if (startDate.includes('/')) {
+                    const [month, day, year] = startDate.split('/').map(Number);
+                    reportStart = new Date(year, month - 1, day);
+                } else {
+                    reportStart = new Date(startDate);
+                }
+                
+                if (endDate.includes('/')) {
+                    const [month, day, year] = endDate.split('/').map(Number);
+                    reportEnd = new Date(year, month - 1, day);
+                } else {
+                    reportEnd = new Date(endDate);
+                }
+                
+                // Format dates for database query (YYYY-MM-DD) using local date, not UTC
+                const startYear = reportStart.getFullYear();
+                const startMonth = String(reportStart.getMonth() + 1).padStart(2, '0');
+                const startDay = String(reportStart.getDate()).padStart(2, '0');
+                const startDateStr = `${startYear}-${startMonth}-${startDay}`;
+                
+                const endYear = reportEnd.getFullYear();
+                const endMonth = String(reportEnd.getMonth() + 1).padStart(2, '0');
+                const endDay = String(reportEnd.getDate()).padStart(2, '0');
+                const endDateStr = `${endYear}-${endMonth}-${endDay}`;
+                
+                // Query invoices by bill_date (preferred) or created_at date part
+                // For daily reports, startDateStr === endDateStr
+                const { data, error } = await supabase
+                    .from('invoices')
+                    .select('id, bill_date, created_at');
+                
+                if (!error && data) {
+                    // Filter invoices that fall within the date range
+                    const filtered = data.filter(invoice => {
+                        // Use bill_date if available, otherwise use created_at date part
+                        const invoiceDate = invoice.bill_date || invoice.created_at.split('T')[0];
+                        return invoiceDate >= startDateStr && invoiceDate <= endDateStr;
+                    });
+                    setInvoiceCount(filtered.length);
+                } else if (error) {
+                    console.error('Error fetching invoice count:', error);
+                    // Fallback to billedItems count
+                    const uniqueInvoiceNumbers = new Set<number>();
+                    billedItems.forEach(item => {
+                        const [month, day, year] = item.date.split('/').map(Number);
+                        const itemDate = new Date(year, month - 1, day);
+                        const reportStartDateOnly = new Date(reportStart.getFullYear(), reportStart.getMonth(), reportStart.getDate());
+                        const reportEndDateOnly = new Date(reportEnd.getFullYear(), reportEnd.getMonth(), reportEnd.getDate(), 23, 59, 59);
+                        if (itemDate >= reportStartDateOnly && itemDate <= reportEndDateOnly) {
+                            uniqueInvoiceNumbers.add(item.invoiceNumber);
+                        }
+                    });
+                    setInvoiceCount(uniqueInvoiceNumbers.size);
+                }
+            } catch (err) {
+                console.error('Error fetching invoice count:', err);
+                // Fallback to billedItems count
+                const uniqueInvoiceNumbers = new Set<number>();
+                billedItems.forEach(item => {
+                    const [month, day, year] = item.date.split('/').map(Number);
+                    const itemDate = new Date(year, month - 1, day);
+                    // Parse dates from M/D/YYYY format
+                    let reportStart: Date;
+                    let reportEnd: Date;
+                    if (startDate.includes('/')) {
+                        const [m, d, y] = startDate.split('/').map(Number);
+                        reportStart = new Date(y, m - 1, d);
+                    } else {
+                        reportStart = new Date(startDate);
+                    }
+                    if (endDate.includes('/')) {
+                        const [m, d, y] = endDate.split('/').map(Number);
+                        reportEnd = new Date(y, m - 1, d);
+                    } else {
+                        reportEnd = new Date(endDate);
+                    }
+                    const reportStartDateOnly = new Date(reportStart.getFullYear(), reportStart.getMonth(), reportStart.getDate());
+                    const reportEndDateOnly = new Date(reportEnd.getFullYear(), reportEnd.getMonth(), reportEnd.getDate(), 23, 59, 59);
+                    if (itemDate >= reportStartDateOnly && itemDate <= reportEndDateOnly) {
+                        uniqueInvoiceNumbers.add(item.invoiceNumber);
+                    }
+                });
+                setInvoiceCount(uniqueInvoiceNumbers.size);
+            }
+        };
+        
+        fetchInvoiceCount();
+    }, [startDate, endDate, billedItems]);
 
     const {
         totalSales,
+        totalOrders,
         profit,
         totalExpenses,
         remainingSale,
         itemsSold,
         allExpensesInRange,
         ordersByTime,
+        revenueByHour,
         topItemsSold
     } = useMemo(() => {
-        const reportStart = new Date(startDate);
-        const reportEnd = new Date(endDate);
+        // Parse dates from M/D/YYYY format (from ReportsPage) or YYYY-MM-DD format
+        let reportStart: Date;
+        let reportEnd: Date;
+        
+        if (startDate.includes('/')) {
+            const [month, day, year] = startDate.split('/').map(Number);
+            reportStart = new Date(year, month - 1, day);
+        } else {
+            reportStart = new Date(startDate);
+        }
+        
+        if (endDate.includes('/')) {
+            const [month, day, year] = endDate.split('/').map(Number);
+            reportEnd = new Date(year, month - 1, day);
+        } else {
+            reportEnd = new Date(endDate);
+        }
 
         const reportStartDateOnly = new Date(reportStart.getFullYear(), reportStart.getMonth(), reportStart.getDate());
         const reportEndDateOnly = new Date(reportEnd.getFullYear(), reportEnd.getMonth(), reportEnd.getDate(), 23, 59, 59);
         
         const relevantBilledItems = billedItems.filter(item => {
-            const itemDate = new Date(item.date);
-            return itemDate >= reportStartDateOnly && itemDate <= reportEndDateOnly;
+            // Parse date string (M/D/YYYY format) to compare dates
+            const [month, day, year] = item.date.split('/').map(Number);
+            const itemDate = new Date(year, month - 1, day);
+            const itemDateOnly = new Date(itemDate.getFullYear(), itemDate.getMonth(), itemDate.getDate());
+            return itemDateOnly >= reportStartDateOnly && itemDateOnly <= reportEndDateOnly;
         });
 
         const totalSales = relevantBilledItems.reduce((sum, item) => sum + item.price, 0);
         const profit = relevantBilledItems.reduce((sum, item) => sum + item.profit, 0);
+        
+        // Count unique orders (invoices) in the date range
+        // Use database invoice count if available, otherwise fallback to billedItems count
+        const uniqueInvoiceNumbers = new Set<number>();
+        relevantBilledItems.forEach(item => {
+            uniqueInvoiceNumbers.add(item.invoiceNumber);
+        });
+        const totalOrders = invoiceCount > 0 ? invoiceCount : uniqueInvoiceNumbers.size;
         
         // --- EXPENSE CALCULATION LOGIC BASED ON REPORT TYPE ---
 
@@ -203,10 +332,28 @@ const ReportView: React.FC<ReportViewProps> = ({ billedItems, expenses, stockEnt
         const itemsSold = Array.from(itemMap.entries()).map(([productName, data]) => ({ productName, ...data }))
                             .sort((a, b) => b.quantity - a.quantity);
 
+        // Calculate revenue by hour
+        const revenueByHour = Array.from({ length: 17 }, (_, i) => ({ hour: i + 5, revenue: 0 }));
+        relevantBilledItems.forEach(item => {
+            const date = new Date(item.timestamp);
+            const hour = date.getHours();
+            if (hour >= 5 && hour <= 21) {
+                const bucket = revenueByHour.find(b => b.hour === hour);
+                if (bucket) {
+                    bucket.revenue += item.price;
+                }
+            }
+        });
+
+        // Calculate orders by time (can be filtered by item)
         const ordersByTime = Array.from({ length: 17 }, (_, i) => ({ hour: i + 5, orders: 0 }));
         
         const invoiceTimestamps = new Map<number, number>();
         relevantBilledItems.forEach(item => {
+            // Filter by item if selected
+            if (itemForOrdersChart !== 'all' && item.productName !== itemForOrdersChart) {
+                return;
+            }
             if (!invoiceTimestamps.has(item.invoiceNumber)) {
                 invoiceTimestamps.set(item.invoiceNumber, item.timestamp);
             }
@@ -227,14 +374,15 @@ const ReportView: React.FC<ReportViewProps> = ({ billedItems, expenses, stockEnt
         
         const topItemsSold = itemsSold.slice(0, 10);
 
-        return { totalSales, profit, totalExpenses, remainingSale, itemsSold, allExpensesInRange, ordersByTime, topItemsSold };
-    }, [billedItems, expenses, stockEntries, expenseItems, startDate, endDate, reportType]);
+        return { totalSales, totalOrders, profit, totalExpenses, remainingSale, itemsSold, allExpensesInRange, ordersByTime, revenueByHour, topItemsSold };
+    }, [billedItems, expenses, stockEntries, expenseItems, startDate, endDate, reportType, invoiceCount, itemForOrdersChart]);
     
     // Reset filters when report data changes
     useEffect(() => {
         setTypeFilter('both');
         setDescriptionFilter('all');
         setProductNameFilter('all');
+        setItemForOrdersChart('all');
     }, [startDate, endDate, reportType]);
 
     // Get unique descriptions for expense filter dropdown
@@ -288,7 +436,11 @@ const ReportView: React.FC<ReportViewProps> = ({ billedItems, expenses, stockEnt
         <div className="space-y-6">
             <h1 className="text-xl font-bold text-gray-800">Report for {title}</h1>
             
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
+                <div className="bg-white p-5 rounded-xl shadow-sm">
+                    <h3 className="text-base font-medium text-gray-500">Total Orders</h3>
+                    <p className="mt-2 text-2xl font-bold text-indigo-600">{totalOrders}</p>
+                </div>
                 <div className="bg-white p-5 rounded-xl shadow-sm">
                     <h3 className="text-base font-medium text-gray-500">Total Sale</h3>
                     <p className="mt-2 text-2xl font-bold text-purple-700">{formatCurrency(totalSales)}</p>
@@ -313,11 +465,52 @@ const ReportView: React.FC<ReportViewProps> = ({ billedItems, expenses, stockEnt
                 <h2 className="text-xl font-bold text-gray-800 mb-4">Analytics</h2>
                 <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
                     <div className="lg:col-span-3">
-                        <OrdersByTimeChart data={ordersByTime} />
+                        <OrdersByTimeChart 
+                            data={ordersByTime} 
+                            itemOptions={uniqueProductNames}
+                            selectedItem={itemForOrdersChart}
+                            onSelectItem={setItemForOrdersChart}
+                        />
                     </div>
                     <div className="lg:col-span-2">
-                        <ItemsSoldChart data={topItemsSold} />
+                        <RevenueByHourChart data={revenueByHour} />
                     </div>
+                </div>
+                {/* Summary for the selected item / orders chart */}
+                <div className="mt-4 bg-white p-4 rounded-xl shadow-sm">
+                    {(() => {
+                        const total = ordersByTime.reduce((s, b) => s + b.orders, 0);
+                        const nonZero = ordersByTime.filter(b => b.orders > 0);
+                        const maxVal = nonZero.length ? Math.max(...nonZero.map(b => b.orders)) : 0;
+                        const minVal = nonZero.length ? Math.min(...nonZero.map(b => b.orders)) : 0;
+                        const formatHour = (h: number) => {
+                            if (h === 12) return '12PM';
+                            if (h > 12) return `${h - 12}PM`;
+                            if (h === 0) return '12AM';
+                            return `${h}AM`;
+                        };
+                        const peakHours = ordersByTime.filter(b => b.orders === maxVal).map(b => formatHour(b.hour));
+                        const lowHours = ordersByTime.filter(b => b.orders === minVal && minVal > 0).map(b => formatHour(b.hour));
+                        const label = (itemForOrdersChart === 'all') ? 'All items' : itemForOrdersChart;
+                        return (
+                            <div className="text-sm text-gray-700">
+                                <div className="flex flex-wrap items-center gap-3 mb-1">
+                                    <span className="font-semibold text-gray-900">Summary:</span>
+                                    <span>
+                                        <span className="font-medium">{label}</span> total count: <span className="font-semibold text-purple-700">{total}</span>
+                                    </span>
+                                </div>
+                                <div className="flex flex-wrap gap-3">
+                                    <span>
+                                        Peak hour{peakHours.length > 1 ? 's' : ''}: <span className="font-semibold">{peakHours.length ? peakHours.join(', ') : '—'}</span> ({maxVal})
+                                    </span>
+                                    <span>
+                                        Low hour{lowHours.length > 1 ? 's' : ''}: <span className="font-semibold">{lowHours.length ? lowHours.join(', ') : '—'}</span> {minVal > 0 ? `(${minVal})` : ''}
+                                    </span>
+                                </div>
+                            </div>
+                        );
+                    })()}
                 </div>
             </div>
 

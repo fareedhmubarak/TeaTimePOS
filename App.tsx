@@ -9,7 +9,7 @@ import OrderPlacedModal from './components/OrderPlacedModal.tsx';
 import UpdateNotification from './components/UpdateNotification.tsx';
 import PrinterSelectionModal from './components/PrinterSelectionModal.tsx';
 import { supabase } from './supabaseClient.ts';
-import { Order, Product, CartItem, BilledItem, Expense, StockEntry, ExpenseItem, BluetoothPrinter, Category } from './types.ts';
+import { deleteProductImage } from './utils/imageUpload.ts';
 import { printReceipt, PrintData } from './utils/printer.ts';
 
 let orderCounter = 1;
@@ -17,14 +17,29 @@ let orderCounter = 1;
 // --- Data Mapping Functions ---
 const mapInvoiceToBilledItems = (invoice: any, dailyInvoiceNumber: number): BilledItem[] => {
     // Use bill_date for display date if available, otherwise use created_at
-    const recordDate = invoice.bill_date ? new Date(invoice.bill_date) : new Date(invoice.created_at);
-    const date = recordDate.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' });
+    // Ensure consistent date formatting across the app
+    let date: string;
+    if (invoice.bill_date) {
+        // bill_date is DATE type (YYYY-MM-DD format)
+        const dateObj = new Date(invoice.bill_date + 'T00:00:00');
+        date = dateObj.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' });
+    } else {
+        // Extract date from created_at (TIMESTAMPTZ)
+        const dateObj = new Date(invoice.created_at);
+        date = dateObj.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' });
+    }
     
     // Always use created_at for timestamp to preserve the actual order time (for charts)
     // bill_date is typically DATE type (date-only) which defaults to midnight
     const timestamp = new Date(invoice.created_at).getTime();
     
-    return (invoice.invoice_items || []).map((item: any) => ({
+    // If invoice has no items, return empty array (invoice still counted in daily numbers)
+    const items = invoice.invoice_items || [];
+    if (items.length === 0) {
+        return []; // Empty invoice - no billed items, but invoice number is still assigned
+    }
+    
+    return items.map((item: any) => ({
         invoiceNumber: dailyInvoiceNumber, // Use daily invoice number instead of database ID
         invoiceDbId: invoice.id, // Store database ID separately for operations
         productName: item.product_name,
@@ -39,18 +54,26 @@ const mapInvoiceToBilledItems = (invoice: any, dailyInvoiceNumber: number): Bill
 
 // Calculate daily invoice numbers for all invoices
 const calculateDailyInvoiceNumbers = (invoices: any[]): Map<number, number> => {
-    // Group invoices by date
+    // Group invoices by date - use bill_date if available, otherwise created_at
     const invoicesByDate: { [date: string]: any[] } = {};
     
     invoices.forEach(invoice => {
-        const recordDate = invoice.bill_date ? new Date(invoice.bill_date) : new Date(invoice.created_at);
-        const timestamp = recordDate.getTime() + (invoice.bill_date ? recordDate.getTimezoneOffset() * 60000 : 0);
-        const date = new Date(timestamp).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' });
-        
-        if (!invoicesByDate[date]) {
-            invoicesByDate[date] = [];
+        // Use bill_date if available (DATE type), otherwise use created_at date part
+        let dateStr: string;
+        if (invoice.bill_date) {
+            // bill_date is already a DATE type (YYYY-MM-DD format)
+            const dateObj = new Date(invoice.bill_date + 'T00:00:00');
+            dateStr = dateObj.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' });
+        } else {
+            // Extract date from created_at (TIMESTAMPTZ)
+            const dateObj = new Date(invoice.created_at);
+            dateStr = dateObj.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' });
         }
-        invoicesByDate[date].push(invoice);
+        
+        if (!invoicesByDate[dateStr]) {
+            invoicesByDate[dateStr] = [];
+        }
+        invoicesByDate[dateStr].push(invoice);
     });
     
     // Sort invoices within each date by ID (which reflects creation order) and assign sequential numbers
@@ -113,6 +136,7 @@ const App: React.FC = () => {
   // Data State (from Supabase)
   const [products, setProducts] = useState<Product[]>([]);
   const [billedItems, setBilledItems] = useState<BilledItem[]>([]);
+  const [allInvoices, setAllInvoices] = useState<any[]>([]); // Store all invoices for accurate counting
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [stockEntries, setStockEntries] = useState<StockEntry[]>([]);
   const [expenseItems, setExpenseItems] = useState<ExpenseItem[]>([]);
@@ -224,7 +248,7 @@ const App: React.FC = () => {
                 supabase.from('products').select('*'),
                 supabase.from('expense_items').select('*'),
                 supabase.from('expenses').select('*').order('expense_date', { ascending: false }),
-                supabase.from('invoices').select('*, invoice_items(*)').order('id', { ascending: false }).limit(100), // Load more for accurate daily invoice numbers
+                supabase.from('invoices').select('*, invoice_items(*)').order('id', { ascending: false }), // Load all invoices for accurate reports
                 supabase.from('purchase_entries').select('*, purchase_items(*)').order('entry_date', { ascending: false }),
                 supabase.from('categories').select('*').order('display_order', { ascending: true })
             ]);
@@ -242,6 +266,7 @@ const App: React.FC = () => {
             
             // Calculate daily invoice numbers and map invoices
             const invoices = invoicesData.data || [];
+            setAllInvoices(invoices); // Store all invoices for accurate counting
             const dbIdToDailyNumber = calculateDailyInvoiceNumbers(invoices);
             const mappedBilledItems = invoices.flatMap((invoice: any) => {
                 const dailyInvoiceNumber = dbIdToDailyNumber.get(invoice.id) || invoice.id;
@@ -398,20 +423,41 @@ const App: React.FC = () => {
   const nextInvoiceNumber = useMemo(() => {
     // Format the current billing date to match the format stored in billedItems
     const selectedDateString = billingDate.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' });
+    
+    // Convert billing date to database format (YYYY-MM-DD) using local date, not UTC
+    const year = billingDate.getFullYear();
+    const month = String(billingDate.getMonth() + 1).padStart(2, '0');
+    const day = String(billingDate.getDate()).padStart(2, '0');
+    const billingDateForDB = `${year}-${month}-${day}`;
 
-    // Filter for invoices on the selected date
-    const invoicesForDate = billedItems.filter(item => item.date === selectedDateString);
+    // Count invoices from allInvoices (more accurate than billedItems)
+    // This ensures we count ALL invoices for today, even if they have no items
+    const invoicesForToday = allInvoices.filter(invoice => {
+        const invoiceDate = invoice.bill_date || invoice.created_at.split('T')[0];
+        return invoiceDate === billingDateForDB;
+    });
 
-    if (invoicesForDate.length === 0) {
+    if (invoicesForToday.length === 0) {
         return 1; // Start from 1 for a new day
     }
 
-    // This logic isn't perfect without a dedicated daily invoice number column.
-    // A simple count of unique invoices is more reliable here.
-    const uniqueInvoiceIds = new Set(invoicesForDate.map(i => i.invoiceNumber));
-    return uniqueInvoiceIds.size + 1;
+    // Calculate daily invoice numbers for today's invoices
+    const dbIdToDailyNumber = calculateDailyInvoiceNumbers(invoicesForToday);
+    
+    // Find the maximum daily invoice number
+    const maxDailyNumber = Math.max(...Array.from(dbIdToDailyNumber.values()));
+    
+    // Also check billedItems for any 'hold' status items (optimistic updates)
+    const invoicesForDate = billedItems.filter(item => item.date === selectedDateString);
+    const holdInvoicesForDate = invoicesForDate.filter(item => item.status === 'hold');
+    const maxHoldInvoiceNumber = holdInvoicesForDate.length > 0 
+      ? Math.max(...holdInvoicesForDate.map(i => i.invoiceNumber))
+      : 0;
+    
+    // Return the next number after the maximum found
+    return Math.max(maxDailyNumber, maxHoldInvoiceNumber) + 1;
 
-  }, [billedItems, billingDate]);
+  }, [billedItems, billingDate, allInvoices]);
 
   const handleNavigate = (newView: 'home' | 'pos' | 'admin') => {
     // ALWAYS require password for admin access
@@ -936,6 +982,17 @@ const App: React.FC = () => {
   };
 
   const handleUpdateProduct = async (updatedProduct: Product) => {
+    // Get the old product to check if image changed
+    const oldProduct = products.find(p => p.id === updatedProduct.id);
+    
+    // Delete old image from storage if it was replaced with a new one
+    if (oldProduct?.imageUrl && 
+        oldProduct.imageUrl !== updatedProduct.imageUrl && 
+        oldProduct.imageUrl.includes('/storage/v1/object/public/')) {
+      // Old image is in storage and different from new one
+      await deleteProductImage(oldProduct.imageUrl);
+    }
+    
     const { data, error } = await supabase.from('products').update({ name: updatedProduct.name, price: updatedProduct.price, profit: updatedProduct.profit, category: updatedProduct.category, image_url: updatedProduct.imageUrl }).eq('id', updatedProduct.id).select().single();
     if(error) { alert(`Failed to update product: ${error.message}`); }
     else { setProducts(prev => prev.map(p => p.id === updatedProduct.id ? { ...data, imageUrl: data.image_url } : p)); }
@@ -943,9 +1000,15 @@ const App: React.FC = () => {
 
   const handleDeleteProduct = async (productId: number) => {
     if (window.confirm("Are you sure? This may affect past reports.")) {
-       const { error } = await supabase.from('products').delete().eq('id', productId);
-       if(error) { alert(`Failed to delete product: ${error.message}`); }
-       else { setProducts(prev => prev.filter(p => p.id !== productId)); }
+      // Get product to delete its image from storage
+      const product = products.find(p => p.id === productId);
+      if (product?.imageUrl && product.imageUrl.includes('/storage/v1/object/public/')) {
+        await deleteProductImage(product.imageUrl);
+      }
+      
+      const { error } = await supabase.from('products').delete().eq('id', productId);
+      if(error) { alert(`Failed to delete product: ${error.message}`); }
+      else { setProducts(prev => prev.filter(p => p.id !== productId)); }
     }
   };
   

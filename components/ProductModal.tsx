@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Product } from '../types.ts';
 import { CATEGORIES } from '../constants.ts';
 import { XIcon } from './Icons.tsx';
+import { uploadProductImage } from '../utils/imageUpload.ts';
 
 interface ProductModalProps {
   isOpen: boolean;
@@ -21,6 +22,7 @@ const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onSave, pr
   const [imageUrl, setImageUrl] = useState('');
   const [imageMethod, setImageMethod] = useState<'url' | 'upload' | 'camera'>('url');
   const [previewImage, setPreviewImage] = useState<string>('');
+  const [isUploading, setIsUploading] = useState(false);
 
   // Get all unique categories from existing products + default categories
   const allCategories = useMemo(() => {
@@ -173,8 +175,13 @@ const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onSave, pr
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (isUploading) {
+      return; // Prevent multiple submissions
+    }
+    
     const priceNum = parseFloat(price);
     const profitNum = parseFloat(profit);
 
@@ -191,12 +198,35 @@ const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onSave, pr
         alert('Profit cannot be greater than the price.');
         return;
       }
+      
+      // Upload image if it's a base64 data URL (uploaded or camera)
+      let finalImageUrl = imageUrl;
+      
+      if (imageUrl && (imageUrl.startsWith('data:') || imageMethod === 'upload' || imageMethod === 'camera')) {
+        setIsUploading(true);
+        try {
+          const uploadedUrl = await uploadProductImage(imageUrl, productToEdit?.id);
+          if (uploadedUrl) {
+            finalImageUrl = uploadedUrl;
+          } else {
+            alert('Failed to upload image. Saving without image.');
+            finalImageUrl = '';
+          }
+        } catch (error) {
+          console.error('Error uploading image:', error);
+          alert('Failed to upload image. Saving without image.');
+          finalImageUrl = '';
+        } finally {
+          setIsUploading(false);
+        }
+      }
+      
       onSave({
         name: name.trim(),
         price: priceNum,
         profit: profitNum,
         category: finalCategory,
-        imageUrl,
+        imageUrl: finalImageUrl,
       }, productToEdit?.id);
     } else {
       alert('Please fill in all fields with valid values.');
@@ -407,9 +437,9 @@ const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onSave, pr
             </div>
         </form>
         <div className="p-4 bg-gray-50 border-t flex justify-end space-x-2">
-          <button type="button" onClick={onClose} className="py-2 px-4 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300">Cancel</button>
-          <button type="submit" onClick={handleSubmit} className="py-2 px-4 bg-purple-600 text-white font-semibold rounded-md hover:bg-purple-700">
-            {productToEdit ? 'Save Changes' : 'Add Product'}
+          <button type="button" onClick={onClose} disabled={isUploading} className="py-2 px-4 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed">Cancel</button>
+          <button type="submit" onClick={handleSubmit} disabled={isUploading} className="py-2 px-4 bg-purple-600 text-white font-semibold rounded-md hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed">
+            {isUploading ? 'Uploading...' : (productToEdit ? 'Save Changes' : 'Add Product')}
           </button>
         </div>
       </div>
