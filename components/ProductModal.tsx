@@ -205,21 +205,40 @@ const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onSave, pr
       if (imageUrl && (imageUrl.startsWith('data:') || imageMethod === 'upload' || imageMethod === 'camera')) {
         setIsUploading(true);
         try {
+          console.log('[ProductModal] Starting image upload for product:', productToEdit?.id || 'new');
           const uploadedUrl = await uploadProductImage(imageUrl, productToEdit?.id);
-          if (uploadedUrl) {
+          console.log('[ProductModal] Image upload result:', uploadedUrl ? 'Success' : 'Failed', uploadedUrl);
+          
+          if (uploadedUrl && uploadedUrl !== imageUrl) {
+            // Successfully uploaded to storage
             finalImageUrl = uploadedUrl;
+            console.log('[ProductModal] Using uploaded URL:', finalImageUrl);
+          } else if (uploadedUrl === imageUrl) {
+            // Already a URL, use as-is
+            finalImageUrl = uploadedUrl;
+            console.log('[ProductModal] Using existing URL:', finalImageUrl);
           } else {
-            alert('Failed to upload image. Saving without image.');
-            finalImageUrl = '';
+            // Upload failed but we have base64 - keep base64 for now
+            console.warn('[ProductModal] Image upload failed, keeping base64 data URL');
+            // Don't clear the image - keep the base64 version
+            finalImageUrl = imageUrl;
+            alert('Warning: Image upload to storage failed. Image will be saved as base64 data. Please check storage permissions.');
           }
-        } catch (error) {
-          console.error('Error uploading image:', error);
-          alert('Failed to upload image. Saving without image.');
-          finalImageUrl = '';
+        } catch (error: any) {
+          console.error('[ProductModal] Error uploading image:', error);
+          // Keep base64 version if upload fails
+          finalImageUrl = imageUrl;
+          alert(`Warning: Image upload failed: ${error.message}. Image will be saved as base64 data.`);
         } finally {
           setIsUploading(false);
         }
+      } else if (imageUrl && !imageUrl.startsWith('data:')) {
+        // It's already a URL (not base64), use it directly
+        finalImageUrl = imageUrl;
+        console.log('[ProductModal] Using provided URL:', finalImageUrl);
       }
+      
+      console.log('[ProductModal] Final image URL to save:', finalImageUrl);
       
       onSave({
         name: name.trim(),

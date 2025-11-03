@@ -98,9 +98,44 @@ export async function uploadProductImage(
       });
     
     if (uploadError) {
-      console.error('Error uploading image:', uploadError);
+      console.error('[imageUpload] Error uploading image:', uploadError);
+      console.error('[imageUpload] Upload error details:', {
+        message: uploadError.message,
+        statusCode: uploadError.statusCode,
+        error: uploadError.error
+      });
+      
+      // If upload fails due to file already existing, try with upsert
+      if (uploadError.message?.includes('already exists') || uploadError.statusCode === '409') {
+        console.log('[imageUpload] File exists, trying upsert...');
+        const { data: upsertData, error: upsertError } = await supabase.storage
+          .from(bucketName)
+          .upload(fileName, file, {
+            cacheControl: '3600',
+            upsert: true // Overwrite existing file
+          });
+          
+        if (upsertError) {
+          console.error('[imageUpload] Upsert also failed:', upsertError);
+          // Fall back to base64 if upload fails
+          if (typeof imageData === 'string') {
+            return imageData;
+          }
+          return null;
+        }
+        
+        // Get public URL for upserted file
+        const { data: urlData } = supabase.storage
+          .from(bucketName)
+          .getPublicUrl(upsertData.path);
+        
+        console.log('[imageUpload] Successfully upserted image:', urlData.publicUrl);
+        return urlData.publicUrl;
+      }
+      
       // Fall back to base64 if upload fails
       if (typeof imageData === 'string') {
+        console.warn('[imageUpload] Upload failed, returning base64 as fallback');
         return imageData;
       }
       return null;
@@ -111,6 +146,7 @@ export async function uploadProductImage(
       .from(bucketName)
       .getPublicUrl(uploadData.path);
     
+    console.log('[imageUpload] Successfully uploaded image:', urlData.publicUrl);
     return urlData.publicUrl;
   } catch (error) {
     console.error('Error in uploadProductImage:', error);

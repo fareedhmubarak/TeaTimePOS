@@ -694,54 +694,25 @@ const App: React.FC = () => {
   
     // Clear any previous order placed info to prevent stale data
     setOrderPlacedInfo(null);
-  
+
     // Create a fresh copy of items to bill
     const itemsToBill = activeOrder.items.map(item => ({ ...item, product: { ...item.product } }));
-    const dailyInvoiceNumber = nextInvoiceNumber; // Use the calculated daily invoice number
-    const billDateString = billingDate.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' });
-    // This combines the user-selected date with the current time for the timestamp.
-    const timestamp = new Date(billingDate).setHours(new Date().getHours(), new Date().getMinutes(), new Date().getSeconds());
 
-    // 1. Optimistic UI Update - Show modal immediately
-    const newBilledItems: BilledItem[] = itemsToBill.map(item => ({
-      invoiceNumber: dailyInvoiceNumber,
-      productName: item.product.name,
-      quantity: item.quantity,
-      price: item.product.price * item.quantity,
-      profit: item.product.profit * item.quantity,
-      date: billDateString,
-      timestamp: timestamp,
-      status: 'hold',
-    }));
-  
-    setBilledItems(prev => [...newBilledItems, ...prev]);
-    
-    // Show order placed modal IMMEDIATELY (before database sync)
-    const totalAmount = itemsToBill.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
-    const itemsForPrint = itemsToBill.map(item => ({
-      name: String(item.product.name || ''),
-      quantity: Number(item.quantity || 0),
-      price: Number((item.product.price * item.quantity).toFixed(2))
-    }));
-    
-    setOrderPlacedInfo({ 
-      invoiceNumber: dailyInvoiceNumber, 
-      totalAmount: Number(totalAmount.toFixed(2)),
-      items: [...itemsForPrint]
-    });
-  
-    const isLastOrder = activeOrderIndex === orders.length - 1;
-    if (orders.length > 1 && !isLastOrder) {
-      const newOrders = orders.filter((o) => o.id !== activeOrder.id);
-      setOrders(newOrders);
-      setActiveOrderIndex(newOrders.length - 1);
-    } else {
-      handleClearOrder();
-    }
-  
-    // 2. Background Database Sync (non-blocking - runs in background)
+    // STEP 1: PERFORM DATABASE SAVE FIRST - CRITICAL PATH
     let newInvoiceId: number | null = null;
+    let dailyInvoiceNumber: number = 0;
+    
     try {
+      // Calculate totals
+      const total_amount = itemsToBill.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
+      const total_profit = itemsToBill.reduce((sum, item) => sum + item.product.profit * item.quantity, 0);
+      
+      // Use LOCAL date parts for bill_date to avoid timezone shifts (YYYY-MM-DD)
+      const year = billingDate.getFullYear();
+      const month = String(billingDate.getMonth() + 1).padStart(2, '0');
+      const day = String(billingDate.getDate()).padStart(2, '0');
+      const billDateForDB = `${year}-${month}-${day}`;
+
       // Optimized: Only fetch product IDs if we have products with IDs > 0
       const hasProductsWithIds = itemsToBill.some(item => item.product.id > 0);
       let productIdsInDB = new Set<number>();
@@ -754,15 +725,7 @@ const App: React.FC = () => {
         productIdsInDB = new Set((currentProductsData || []).map(p => p.id));
       }
 
-      const total_amount = itemsToBill.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
-      const total_profit = itemsToBill.reduce((sum, item) => sum + item.product.profit * item.quantity, 0);
-      
-      // FIX: Align date format with other working parts of the app (e.g., expenses).
-      // The `bill_date` column in the database likely expects a 'YYYY-MM-DD' string,
-      // and sending a full timestamp was causing a schema cache error.
-      const billDateForDB = billingDate.toISOString().split('T')[0];
-
-      // Use a single, atomic insert for the invoice record.
+      // STEP 1.1: Insert invoice record
       const { data: invoiceData, error: invoiceError } = await supabase
         .from('invoices')
         .insert({
@@ -773,13 +736,14 @@ const App: React.FC = () => {
         .select()
         .single();
       
-      if (invoiceError || !invoiceData) {
+      if (invoiceError || !invoiceData || !invoiceData.id) {
         throw new Error(invoiceError?.message || "Failed to create invoice record.");
       }
       
       newInvoiceId = invoiceData.id;
+      console.log(`[BILLING] Invoice created in DB with ID: ${newInvoiceId}`);
 
-      // Prepare and insert invoice items
+      // STEP 1.2: Insert invoice items
       const itemsToInsert = itemsToBill.map(item => {
         const isProductValid = item.product.id > 0 && productIdsInDB.has(item.product.id);
         return {
@@ -797,51 +761,104 @@ const App: React.FC = () => {
         .insert(itemsToInsert);
         
       if (itemsError) {
-        // If items fail to insert, the entire transaction is rolled back below.
         throw new Error(itemsError.message || "Failed to save invoice items.");
       }
-  
-      // 3. Sync Success: Update local state with real data - keep daily invoice number, add database ID
-      setBilledItems(prev =>
-        prev.map(item =>
-            item.invoiceNumber === dailyInvoiceNumber && item.status === 'hold'
-            ? { ...item, invoiceDbId: newInvoiceId!, status: 'synced' }
-            : item
-        )
-      );
+      console.log(`[BILLING] Invoice items saved for invoice ID: ${newInvoiceId}`);
+
+      // STEP 2: VERIFY SAVE SUCCEEDED - Explicit verification
+      const { data: verifyInvoiceData, error: verifyError } = await supabase
+        .from('invoices')
+        .select('id, bill_date, created_at')
+        .eq('id', newInvoiceId)
+        .single();
+
+      if (verifyError || !verifyInvoiceData) {
+        throw new Error(`Save verification failed: ${verifyError?.message || 'Invoice not found in database'}`);
+      }
+      console.log(`[BILLING] Verified invoice exists in DB: ${verifyInvoiceData.id}`);
+
+      // STEP 3: REFRESH ALL INVOICES FROM DATABASE - Get accurate daily invoice number
+      const { data: freshInvoicesData, error: refreshError } = await supabase
+        .from('invoices')
+        .select('*, invoice_items(*)')
+        .order('id', { ascending: false });
+
+      if (refreshError) {
+        throw new Error(`Failed to refresh invoices: ${refreshError.message}`);
+      }
+
+      const freshInvoices = freshInvoicesData || [];
+      
+      // STEP 4: CALCULATE DAILY INVOICE NUMBER FROM DATABASE
+      const dbIdToDailyNumber = calculateDailyInvoiceNumbers(freshInvoices);
+      dailyInvoiceNumber = dbIdToDailyNumber.get(newInvoiceId) || newInvoiceId;
+      
+      if (!dailyInvoiceNumber || dailyInvoiceNumber <= 0) {
+        throw new Error(`Failed to calculate daily invoice number for invoice ID ${newInvoiceId}`);
+      }
+      console.log(`[BILLING] Calculated daily invoice number: ${dailyInvoiceNumber} for DB ID: ${newInvoiceId}`);
+
+      // STEP 5: UPDATE ALL INVOICES STATE (triggers nextInvoiceNumber recalculation)
+      setAllInvoices(freshInvoices);
+
+      // STEP 6: UPDATE BILLED ITEMS STATE
+      const billDateString = new Date(`${billDateForDB}T00:00:00`).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' });
+      const timestamp = new Date().getTime();
+      const syncedBilledItems: BilledItem[] = itemsToBill.map(item => ({
+        invoiceNumber: dailyInvoiceNumber,
+        invoiceDbId: newInvoiceId!,
+        productName: item.product.name,
+        quantity: item.quantity,
+        price: item.product.price * item.quantity,
+        profit: item.product.profit * item.quantity,
+        date: billDateString,
+        timestamp: timestamp,
+        status: 'synced'
+      }));
+
+      setBilledItems(prev => [...syncedBilledItems, ...prev]);
+      console.log(`[BILLING] Updated billedItems state with invoice #${dailyInvoiceNumber}`);
+
+      // STEP 7: CLEAR ORDER (only after successful save)
+      const isLastOrder = activeOrderIndex === orders.length - 1;
+      if (orders.length > 1 && !isLastOrder) {
+        const newOrders = orders.filter((o) => o.id !== activeOrder.id);
+        setOrders(newOrders);
+        setActiveOrderIndex(newOrders.length - 1);
+      } else {
+        handleClearOrder();
+      }
+
+      // STEP 8: SHOW POPUP (only after everything is saved and verified)
+      const itemsForPrint = itemsToBill.map(item => ({
+        name: String(item.product.name || ''),
+        quantity: Number(item.quantity || 0),
+        price: Number((item.product.price * item.quantity).toFixed(2))
+      }));
+      
+      setOrderPlacedInfo({
+        invoiceNumber: dailyInvoiceNumber,
+        totalAmount: Number(total_amount.toFixed(2)),
+        items: [...itemsForPrint]
+      });
+      console.log(`[BILLING] Order placed modal shown for invoice #${dailyInvoiceNumber}. Next invoice should be ${dailyInvoiceNumber + 1}`);
+
     } catch (err: any) {
-      // 4. Sync Failure: Rollback and Revert UI
-      console.error("Optimistic billing failed:", err);
-      alert(`Failed to save order to the database: ${err.message}. The order has been moved to 'Held' for you to retry.`);
-  
-      // If an invoice was partially created (i.e., the invoice insert succeeded but items insert failed),
-      // roll it back to prevent inconsistent data.
+      console.error("[BILLING ERROR] Billing failed:", err);
+      alert(`Failed to save order to the database: ${err.message}. Please try again.`);
+
+      // ROLLBACK: If an invoice was partially created, delete it to prevent orphaned records
       if (newInvoiceId) {
-          console.error(`An error occurred. Rolling back invoice #${newInvoiceId}...`);
-          // This delete is critical for data integrity.
-          await supabase.from('invoices').delete().eq('id', newInvoiceId);
+          console.error(`[BILLING] Rolling back partially created invoice #${newInvoiceId}...`);
+          try {
+            await supabase.from('invoices').delete().eq('id', newInvoiceId);
+            console.log(`[BILLING] Successfully rolled back invoice #${newInvoiceId}`);
+          } catch (rollbackError: any) {
+            console.error(`[BILLING] Failed to rollback invoice #${newInvoiceId}:`, rollbackError);
+          }
       }
       
-      // Remove the temporary 'hold' items from the UI
-      setBilledItems(prev => prev.filter(item => !(item.invoiceNumber === dailyInvoiceNumber && item.status === 'hold')));
-  
-      // Restore the failed order to a held slot so it's not lost
-      setOrders(prevOrders => {
-        const lastOrder = prevOrders[prevOrders.length - 1];
-        if (prevOrders.length >= 8) {
-          alert("Cannot add to hold because held orders are full. Restoring order in the current tab instead.");
-          const restoredOrders = [...prevOrders];
-          restoredOrders[prevOrders.length - 1].items = itemsToBill;
-          return restoredOrders;
-        }
-  
-        const failedOrderAsHold = { id: orderCounter++, items: itemsToBill };
-        return [
-          ...prevOrders.slice(0, -1),
-          failedOrderAsHold,
-          lastOrder
-        ];
-      });
+      // DO NOT update UI state on error - keep order intact for retry
     }
   };
 
@@ -985,17 +1002,60 @@ const App: React.FC = () => {
     // Get the old product to check if image changed
     const oldProduct = products.find(p => p.id === updatedProduct.id);
     
+    console.log('[App] Updating product:', updatedProduct.id, 'Old image:', oldProduct?.imageUrl, 'New image:', updatedProduct.imageUrl);
+    
     // Delete old image from storage if it was replaced with a new one
     if (oldProduct?.imageUrl && 
         oldProduct.imageUrl !== updatedProduct.imageUrl && 
         oldProduct.imageUrl.includes('/storage/v1/object/public/')) {
       // Old image is in storage and different from new one
+      console.log('[App] Deleting old image:', oldProduct.imageUrl);
       await deleteProductImage(oldProduct.imageUrl);
     }
     
-    const { data, error } = await supabase.from('products').update({ name: updatedProduct.name, price: updatedProduct.price, profit: updatedProduct.profit, category: updatedProduct.category, image_url: updatedProduct.imageUrl }).eq('id', updatedProduct.id).select().single();
-    if(error) { alert(`Failed to update product: ${error.message}`); }
-    else { setProducts(prev => prev.map(p => p.id === updatedProduct.id ? { ...data, imageUrl: data.image_url } : p)); }
+    const { data, error } = await supabase
+      .from('products')
+      .update({ 
+        name: updatedProduct.name, 
+        price: updatedProduct.price, 
+        profit: updatedProduct.profit, 
+        category: updatedProduct.category, 
+        image_url: updatedProduct.imageUrl || null // Explicitly set to null if empty
+      })
+      .eq('id', updatedProduct.id)
+      .select()
+      .single();
+      
+    if(error) { 
+      console.error('[App] Failed to update product:', error);
+      alert(`Failed to update product: ${error.message}`); 
+    } else {
+      console.log('[App] Product updated successfully:', data);
+      console.log('[App] Updated image_url from DB:', data.image_url);
+      
+      // Update local state with data from database (ensures consistency)
+      setProducts(prev => prev.map(p => 
+        p.id === updatedProduct.id 
+          ? { ...data, imageUrl: data.image_url || '' } 
+          : p
+      ));
+      
+      // Also refresh products from database to ensure we have the latest data
+      const { data: refreshedProducts, error: refreshError } = await supabase
+        .from('products')
+        .select('*')
+        .eq('id', updatedProduct.id)
+        .single();
+        
+      if (!refreshError && refreshedProducts) {
+        console.log('[App] Refreshed product from DB:', refreshedProducts);
+        setProducts(prev => prev.map(p => 
+          p.id === updatedProduct.id 
+            ? { ...refreshedProducts, imageUrl: refreshedProducts.image_url || '' } 
+            : p
+        ));
+      }
+    }
   };
 
   const handleDeleteProduct = async (productId: number) => {

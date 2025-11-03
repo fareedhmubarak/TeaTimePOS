@@ -97,6 +97,46 @@ const POSView: React.FC<POSViewProps> = ({
     setMobileSidebarOpen(false);
   };
 
+  // Calculate product sales counts from last 5 days
+  const productSalesCounts = useMemo(() => {
+    const salesCounts = new Map<string, number>();
+    
+    // Calculate date range (last 5 days including today)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const fiveDaysAgo = new Date(today);
+    fiveDaysAgo.setDate(today.getDate() - 4); // 4 days ago + today = 5 days
+    
+    // Count orders for each product from last 5 days
+    // Track unique invoice numbers per product to count orders (not quantities)
+    const productInvoiceNumbers = new Map<string, Set<number>>();
+    
+    billedItems.forEach(item => {
+      // Parse date from billedItems (format: M/D/YYYY)
+      const [month, day, year] = item.date.split('/').map(Number);
+      const itemDate = new Date(year, month - 1, day);
+      itemDate.setHours(0, 0, 0, 0);
+      
+      // Check if item is within last 5 days
+      if (itemDate >= fiveDaysAgo && itemDate <= today) {
+        const productName = item.productName.toLowerCase();
+        
+        // Track unique invoice numbers for this product
+        if (!productInvoiceNumbers.has(productName)) {
+          productInvoiceNumbers.set(productName, new Set());
+        }
+        productInvoiceNumbers.get(productName)!.add(item.invoiceNumber);
+      }
+    });
+    
+    // Convert unique invoice counts to sales counts
+    productInvoiceNumbers.forEach((invoiceSet, productName) => {
+      salesCounts.set(productName, invoiceSet.size);
+    });
+    
+    return salesCounts;
+  }, [billedItems]);
+
   const filteredProducts = useMemo(() => {
     const categoryProducts = products.filter((p) => {
       if (selectedCategory === "FREQUENT") return p.category === "FREQUENT";
@@ -106,10 +146,26 @@ const POSView: React.FC<POSViewProps> = ({
       );
     });
 
-    return categoryProducts.filter((product) =>
+    const filtered = categoryProducts.filter((product) =>
       product.name.toLowerCase().includes(searchTerm.toLowerCase())
     );
-  }, [selectedCategory, searchTerm, products]);
+
+    // Sort by sales count (most sold first), then alphabetically for products with same count
+    return filtered.sort((a, b) => {
+      const aName = a.name.toLowerCase();
+      const bName = b.name.toLowerCase();
+      const aCount = productSalesCounts.get(aName) || 0;
+      const bCount = productSalesCounts.get(bName) || 0;
+      
+      // First sort by sales count (descending)
+      if (bCount !== aCount) {
+        return bCount - aCount;
+      }
+      
+      // If same count, sort alphabetically
+      return aName.localeCompare(bName);
+    });
+  }, [selectedCategory, searchTerm, products, productSalesCounts]);
 
   const isViewingHistory = viewedInvoiceNumber !== null;
   const displayOrder = isViewingHistory ? viewedOrder : activeOrder;
