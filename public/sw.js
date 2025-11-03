@@ -17,6 +17,7 @@ const NETWORK_ONLY_PATTERNS = [
   /\/rest\/v1\//, // Supabase REST API
   /\/storage\/v1\//, // Supabase Storage
   /\/auth\/v1\//, // Supabase Auth
+  /\/realtime\/v1\//, // Supabase Realtime
 ];
 
 // Cache only static assets (images, icons, manifest)
