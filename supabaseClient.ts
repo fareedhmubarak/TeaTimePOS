@@ -13,15 +13,21 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase configuration. Please check supabaseClient.ts');
 }
 
-// Create and export the Supabase client
-// Supabase client automatically includes the API key in requests
+// Create and export the Supabase client with explicit global headers
+// This ensures the API key is always included in requests, especially in production builds
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    persistSession: false, // Don't persist session in localStorage for POS app
+    persistSession: false,
     autoRefreshToken: false,
   },
   db: {
     schema: 'public',
+  },
+  global: {
+    headers: {
+      'apikey': supabaseAnonKey,
+      'Authorization': `Bearer ${supabaseAnonKey}`,
+    },
   },
 });
 

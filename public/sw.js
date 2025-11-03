@@ -1,6 +1,6 @@
 // Version number - Update this when you push new code to trigger auto-updates
 // Change this version number whenever you deploy new code to trigger automatic updates
-const APP_VERSION = '1.0.9';
+const APP_VERSION = '1.0.10';
 const CACHE_NAME = `tea-time-pos-cache-v${APP_VERSION}`;
 
 // NEVER cache these - always fetch from network
@@ -64,6 +64,14 @@ self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
   const requestUrl = event.request.url;
   const requestMethod = event.request.method;
+  
+  // CRITICAL: Don't intercept Supabase API requests at all - let them pass through untouched
+  // Supabase requests must include API key headers which can be lost if we modify the request
+  // If we don't call event.respondWith(), the browser handles the request normally
+  if (requestUrl.includes('supabase.co') || requestUrl.includes('supabase.io')) {
+    // Don't intercept - let browser handle normally (preserves all headers)
+    return;
+  }
   
   // NEVER cache POST, PUT, DELETE requests (API calls)
   if (requestMethod !== 'GET') {
