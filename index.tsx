@@ -50,21 +50,21 @@ function registerServiceWorker() {
       // Force immediate update check
       registration.update();
       
-      // Wait for service worker to be ready
+      // Wait for service worker to be ready - but don't reload immediately
       if (registration.installing) {
         console.log('Service Worker installing...');
         registration.installing.addEventListener('statechange', (e) => {
           const sw = e.target as ServiceWorker;
           if (sw.state === 'activated') {
             console.log('✅ Service Worker activated and ready!');
-            // Reload to ensure fresh code
-            window.location.reload();
+            // Don't reload immediately - let app load first
+            // Only reload if there's a critical update
           }
         });
       } else if (registration.waiting) {
         console.log('Service Worker waiting, activating...');
         registration.waiting.postMessage({ type: 'SKIP_WAITING' });
-        window.location.reload();
+        // Don't reload immediately - let app load first
       } else if (registration.active) {
         console.log('✅ Service Worker already active!');
         // Force update check
@@ -94,10 +94,11 @@ function registerServiceWorker() {
     });
   }, 30000); // Check every 30 seconds
   
-  // Listen for service worker updates
+  // Listen for service worker updates - but don't reload immediately
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    console.log('Service Worker controller changed - reloading to get update');
-    window.location.reload();
+    console.log('Service Worker controller changed');
+    // Don't auto-reload - let user continue working
+    // They can manually reload if needed
   });
 }
 
@@ -117,19 +118,29 @@ window.addEventListener('unhandledrejection', (event) => {
 });
 
 // Clear ALL caches and register service worker when page loads
+// Don't block app rendering if service worker fails
 if ('serviceWorker' in navigator) {
   // Clear all caches first to ensure fresh code, then register service worker
+  // Do this asynchronously so it doesn't block app rendering
   clearAllCachesOnLoad().then(() => {
-    // Wait a bit for cache clearing to complete
+    // Wait a bit for cache clearing to complete, but don't delay app rendering
     setTimeout(() => {
-      if (document.readyState === 'complete') {
-        registerServiceWorker();
-      } else {
-        window.addEventListener('load', () => {
-          setTimeout(registerServiceWorker, 500);
-        });
+      try {
+        if (document.readyState === 'complete') {
+          registerServiceWorker();
+        } else {
+          window.addEventListener('load', () => {
+            setTimeout(registerServiceWorker, 500);
+          });
+        }
+      } catch (error) {
+        console.error('Error during service worker setup:', error);
+        // Don't throw - app should still work without service worker
       }
     }, 100);
+  }).catch(error => {
+    console.error('Error clearing cache:', error);
+    // Don't throw - app should still work
   });
 }
 

@@ -12,6 +12,10 @@ interface ProductGridProps {
 }
 
 const ProductGrid: React.FC<ProductGridProps> = ({ products, onAddItem, searchTerm, onSearchChange, activeOrderItems }) => {
+  const filteredProducts = products.filter(p => 
+    p.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   return (
     <div className="flex-1 flex flex-col overflow-hidden h-full">
       <div className="relative mb-2 flex-shrink-0">
@@ -32,16 +36,33 @@ const ProductGrid: React.FC<ProductGridProps> = ({ products, onAddItem, searchTe
         </div>
       </div>
       <div className="flex-1 overflow-y-auto pr-1 min-h-0">
-        <div className="grid grid-cols-4 gap-2">
-          {products.map((product) => (
-             <ProductCard 
-                key={product.id} 
-                product={product} 
-                onAddItem={onAddItem}
-                quantityInCart={activeOrderItems.find(item => item.product.id === product.id)?.quantity || 0}
-            />
-          ))}
-        </div>
+        {products.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full text-gray-500">
+            <p className="text-lg font-semibold mb-2">No Products Loaded</p>
+            <p className="text-sm text-center mb-4">Products could not be loaded from the database.</p>
+            <button 
+              onClick={() => window.location.reload()} 
+              className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
+            >
+              Refresh Page
+            </button>
+          </div>
+        ) : filteredProducts.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full text-gray-500">
+            <p className="text-lg">No products match "{searchTerm}"</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-4 gap-2">
+            {filteredProducts.map((product) => (
+               <ProductCard 
+                  key={product.id} 
+                  product={product} 
+                  onAddItem={onAddItem}
+                  quantityInCart={activeOrderItems.find(item => item.product.id === product.id)?.quantity || 0}
+              />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

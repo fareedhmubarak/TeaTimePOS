@@ -320,76 +320,139 @@ const App: React.FC = () => {
     const fetchInitialData = async () => {
         try {
             setLoading(true);
+            setError(null); // Clear any previous errors
+            
+            console.log('🔄 Starting data fetch...');
+            
+            // Set a timeout to ensure loading is cleared even if something hangs
+            const timeoutId = setTimeout(() => {
+                console.warn('⚠️ Data fetch taking too long, forcing loading to false');
+                setLoading(false);
+            }, 5000); // 5 second timeout - show welcome screen faster
+            
+            // PHASE 1: Load critical data first (products, categories) - needed for POS
+            console.log('📦 Phase 1: Loading critical data (products, categories)...');
+            
+            // Retry function for failed queries
+            const retryQuery = async (queryFn: () => Promise<any>, retries = 3, delay = 1000) => {
+                for (let i = 0; i < retries; i++) {
+                    try {
+                        const result = await queryFn();
+                        if (!result.error) return result;
+                        console.error(`Query error (attempt ${i + 1}/${retries}):`, result.error);
+                        if (i < retries - 1) {
+                            console.log(`⚠️ Query failed, retrying... (${i + 1}/${retries})`);
+                            await new Promise(resolve => setTimeout(resolve, delay * (i + 1)));
+                        }
+                    } catch (err: any) {
+                        console.error(`Query exception (attempt ${i + 1}/${retries}):`, err);
+                        if (i < retries - 1) {
+                            console.log(`⚠️ Query error, retrying... (${i + 1}/${retries})`);
+                            await new Promise(resolve => setTimeout(resolve, delay * (i + 1)));
+                        } else {
+                            throw err;
+                        }
+                    }
+                }
+                throw new Error('Query failed after retries');
+            };
+            
+            const [productsResult, categoriesResult] = await Promise.allSettled([
+                retryQuery(() => supabase.from('products').select('*')),
+                retryQuery(() => supabase.from('categories').select('*').order('display_order', { ascending: true }))
+            ]);
+
+            // Process critical data
+            if (productsResult.status === 'fulfilled' && !productsResult.value.error) {
+                setProducts((productsResult.value.data || []).map((p: any) => ({ ...p, imageUrl: p.image_url })));
+                console.log('✅ Products loaded:', productsResult.value.data?.length || 0);
+            } else {
+                const errorMsg = productsResult.status === 'rejected' ? productsResult.reason?.message : productsResult.value?.error?.message;
+                console.error('❌ Failed to load products:', errorMsg);
+            }
+
+            if (categoriesResult.status === 'fulfilled' && !categoriesResult.value.error) {
+                setCategories((categoriesResult.value.data || []).map((c: any) => ({
+                    id: c.id,
+                    name: c.name,
+                    displayOrder: c.display_order
+                })));
+                console.log('✅ Categories loaded:', categoriesResult.value.data?.length || 0);
+            } else {
+                const errorMsg = categoriesResult.status === 'rejected' ? categoriesResult.reason?.message : categoriesResult.value?.error?.message;
+                console.error('❌ Failed to load categories:', errorMsg);
+            }
+
+            // Clear timeout and show UI immediately
+            clearTimeout(timeoutId);
+            setLoading(false);
+            console.log('✅ Critical data loaded, UI can render now');
+
+            // PHASE 2: Load non-critical data in background (can be slower)
+            console.log('📦 Phase 2: Loading secondary data (expenses, invoices, etc.)...');
             const [
-                productsData,
                 expenseItemsData,
                 expensesData,
                 invoicesData,
-                stockEntriesData,
-                categoriesData
-            ] = await Promise.all([
-                supabase.from('products').select('*'),
+                stockEntriesData
+            ] = await Promise.allSettled([
                 supabase.from('expense_items').select('*'),
                 supabase.from('expenses').select('*').order('expense_date', { ascending: false }),
-                supabase.from('invoices').select('*, invoice_items(*)').order('id', { ascending: false }), // Load all invoices for accurate reports
-                supabase.from('purchase_entries').select('*, purchase_items(*)').order('entry_date', { ascending: false }),
-                supabase.from('categories').select('*').order('display_order', { ascending: true })
+                supabase.from('invoices').select('*, invoice_items(*)').order('id', { ascending: false }).limit(500),
+                supabase.from('purchase_entries').select('*, purchase_items(*)').order('entry_date', { ascending: false })
             ]);
 
-            // Check for errors in parallel fetches
-            const errors = [productsData.error, expenseItemsData.error, expensesData.error, invoicesData.error, stockEntriesData.error, categoriesData.error].filter(Boolean);
-            if (errors.length > 0) {
-                throw new Error(errors.map(e => e?.message).join(', '));
+            // Process secondary data
+            if (expenseItemsData.status === 'fulfilled' && !expenseItemsData.value.error) {
+                setExpenseItems((expenseItemsData.value.data || []).map((e: any) => ({ ...e, allowSubItems: e.allow_sub_items, subItems: e.sub_items })));
+            } else {
+                console.warn('⚠️ Failed to load expense items');
             }
-            
-            // Map and set state
-            setProducts((productsData.data || []).map((p: any) => ({ ...p, imageUrl: p.image_url })));
-            setExpenseItems((expenseItemsData.data || []).map((e: any) => ({ ...e, allowSubItems: e.allow_sub_items, subItems: e.sub_items })));
-            setExpenses((expensesData.data || []).map((e: any) => ({ ...e, date: new Date(e.expense_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' }) })));
-            
-            // Calculate daily invoice numbers and map invoices
-            const invoices = invoicesData.data || [];
-            setAllInvoices(invoices); // Store all invoices for accurate counting
-            const dbIdToDailyNumber = calculateDailyInvoiceNumbers(invoices);
-            const mappedBilledItems = invoices.flatMap((invoice: any) => {
-                const dailyInvoiceNumber = dbIdToDailyNumber.get(invoice.id) || invoice.id;
-                return mapInvoiceToBilledItems(invoice, dailyInvoiceNumber);
-            });
-            setBilledItems(mappedBilledItems);
-            
-            setStockEntries((stockEntriesData.data || []).map(mapPurchaseEntryToStockEntry));
-            
-            setCategories((categoriesData.data || []).map((c: any) => ({
-                id: c.id,
-                name: c.name,
-                displayOrder: c.display_order
-            })));
+
+            if (expensesData.status === 'fulfilled' && !expensesData.value.error) {
+                setExpenses((expensesData.value.data || []).map((e: any) => ({ ...e, date: new Date(e.expense_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' }) })));
+            } else {
+                console.warn('⚠️ Failed to load expenses');
+            }
+
+            if (invoicesData.status === 'fulfilled' && !invoicesData.value.error) {
+                const invoices = invoicesData.value.data || [];
+                setAllInvoices(invoices);
+                const dbIdToDailyNumber = calculateDailyInvoiceNumbers(invoices);
+                const mappedBilledItems = invoices.flatMap((invoice: any) => {
+                    const dailyInvoiceNumber = dbIdToDailyNumber.get(invoice.id) || invoice.id;
+                    return mapInvoiceToBilledItems(invoice, dailyInvoiceNumber);
+                });
+                setBilledItems(mappedBilledItems);
+                console.log('✅ Invoices loaded:', invoices.length);
+            } else {
+                console.warn('⚠️ Failed to load invoices');
+            }
+
+            if (stockEntriesData.status === 'fulfilled' && !stockEntriesData.value.error) {
+                setStockEntries((stockEntriesData.value.data || []).map(mapPurchaseEntryToStockEntry));
+            } else {
+                console.warn('⚠️ Failed to load stock entries');
+            }
+
+            console.log('✅ All data loading complete');
 
         } catch (err: any) {
-            console.error("Error fetching initial data:", err);
-            console.error("Error details:", {
-                message: err.message,
-                stack: err.stack,
-                name: err.name
-            });
-            
-            // Set error state - this will show error UI instead of blank screen
-            setError(err.message || "Could not load data from the database. Please check your internet connection and try again.");
+            console.error("❌ Fatal error fetching initial data:", err);
             setLoading(false);
-            
-            // Don't rethrow - let error UI handle it
+            setError(err.message || "Failed to initialize application. Please refresh the page.");
         }
     };
     
-    // Wrap in try-catch for extra safety
-    try {
-        fetchInitialData();
-    } catch (err: any) {
-        console.error("Fatal error in fetchInitialData:", err);
-        setError(err.message || "Failed to initialize application.");
+    // Always ensure loading is set properly
+    fetchInitialData().catch((err: any) => {
+        console.error("❌ Fatal error in fetchInitialData:", err);
         setLoading(false);
-    }
+        setError(err.message || "Failed to initialize application. Please refresh the page.");
+    });
+  }, []);
 
+  useEffect(() => {
     const handleBeforeInstallPrompt = (e: Event) => {
         console.log('✅ PWA: Install prompt event received! Browser will show install icon in toolbar', e);
         // Don't prevent default - let browser show install icon in toolbar automatically
@@ -456,6 +519,8 @@ const App: React.FC = () => {
     document.addEventListener('keydown', checkOnInteraction, { once: true });
 
     // Service Worker update detection
+    let printerSelectionHandler: EventListener | null = null;
+    
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.ready.then(registration => {
         setServiceWorkerRegistration(registration);
@@ -479,23 +544,23 @@ const App: React.FC = () => {
       });
       
       // Listen for printer selection requests from OrderPanel
-      const handleShowPrinterSelection = (event: CustomEvent) => {
-        console.log('Received showPrinterSelection event:', event.detail);
-        if (event.detail && event.detail.printData) {
-          setPendingPrintData(event.detail.printData);
+      printerSelectionHandler = (event: Event) => {
+        const customEvent = event as CustomEvent;
+        console.log('Received showPrinterSelection event:', customEvent.detail);
+        if (customEvent.detail && customEvent.detail.printData) {
+          setPendingPrintData(customEvent.detail.printData);
           setIsPrinterSelectionModalOpen(true);
         }
       };
       
-      window.addEventListener('showPrinterSelection', handleShowPrinterSelection as EventListener);
-      
-      return () => {
-        window.removeEventListener('showPrinterSelection', handleShowPrinterSelection as EventListener);
-      };
+      window.addEventListener('showPrinterSelection', printerSelectionHandler);
     }
 
     return () => {
         window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+        if (printerSelectionHandler) {
+          window.removeEventListener('showPrinterSelection', printerSelectionHandler);
+        }
     };
   }, []);
 
@@ -566,6 +631,10 @@ const App: React.FC = () => {
       return; // CRITICAL: return prevents setView('admin') from executing
     }
     
+    // Clear any previous errors when navigating
+    setError(null);
+    
+    // Allow navigation even if products aren't loaded - will show error in POS view if needed
     setView(newView);
     if (newView === 'pos') {
       setViewedInvoiceNumber(null);
@@ -1339,7 +1408,8 @@ const App: React.FC = () => {
     }
   }
 
-  if (loading && products.length === 0) {
+  // Show loading screen only while actively loading (not if loading failed)
+  if (loading) {
     return (
         <div className="h-screen w-screen flex flex-col items-center justify-center bg-gray-100">
             <div className="text-3xl font-bold text-purple-800">Tea Time POS</div>
@@ -1348,13 +1418,24 @@ const App: React.FC = () => {
     );
   }
 
-  if (error) {
+  if (error && (view === 'pos' || view === 'admin')) {
+    // Only show error screen if user is trying to use POS/Admin without data
     return (
         <div className="h-screen w-screen flex flex-col items-center justify-center bg-red-50 p-4">
             <div className="text-2xl font-bold text-red-700">Connection Error</div>
             <p className="mt-2 text-red-600 text-center">Could not connect to the Supabase database.</p>
             <p className="mt-4 text-sm text-gray-600 text-center">Please ensure you have correctly configured your Supabase URL and anon key in the `supabaseClient.ts` file and that your internet connection is active.</p>
             <pre className="mt-2 p-2 bg-red-100 text-red-800 text-xs rounded-md text-left max-w-full overflow-x-auto">{error}</pre>
+            <button 
+              onClick={() => {
+                setError(null);
+                setView('home');
+                window.location.reload();
+              }}
+              className="mt-4 px-6 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
+            >
+              Go to Home
+            </button>
         </div>
     );
   }

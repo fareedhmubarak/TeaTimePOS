@@ -29,6 +29,12 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
       'Authorization': `Bearer ${supabaseAnonKey}`,
     },
   },
+  realtime: {
+    // Disable realtime for now to avoid connection issues
+    params: {
+      eventsPerSecond: 0,
+    },
+  },
 });
 
 // Verify connection on module load
