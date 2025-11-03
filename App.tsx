@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import Header from './components/Header.tsx';
 import HomeScreen from './components/HomeScreen.tsx';
 import POSView from './components/POSView.tsx';
@@ -233,6 +233,89 @@ const App: React.FC = () => {
     }
   }, []);
 
+  // Refresh invoices function - reusable and memoized
+  const refreshInvoices = useCallback(async () => {
+    try {
+      console.log('[refreshInvoices] Fetching fresh invoices from database...');
+      const { data: invoicesData, error: invoicesError } = await supabase
+        .from('invoices')
+        .select('*, invoice_items(*)')
+        .order('id', { ascending: false });
+      
+      if (invoicesError) {
+        console.error('[refreshInvoices] Error:', invoicesError);
+        return;
+      }
+      
+      const invoices = invoicesData || [];
+      console.log(`[refreshInvoices] Fetched ${invoices.length} invoices`);
+      
+      // Update all invoices state
+      setAllInvoices(invoices);
+      
+      // Recalculate billed items with fresh data
+      const dbIdToDailyNumber = calculateDailyInvoiceNumbers(invoices);
+      const mappedBilledItems = invoices.flatMap((invoice: any) => {
+        const dailyInvoiceNumber = dbIdToDailyNumber.get(invoice.id) || invoice.id;
+        return mapInvoiceToBilledItems(invoice, dailyInvoiceNumber);
+      });
+      setBilledItems(mappedBilledItems);
+      
+      console.log('[refreshInvoices] Invoices refreshed successfully');
+    } catch (error) {
+      console.error('[refreshInvoices] Failed to refresh invoices:', error);
+    }
+  }, []);
+
+  // Set up real-time subscription for invoices
+  useEffect(() => {
+    console.log('[App] Setting up real-time subscription for invoices...');
+    
+    const channel = supabase
+      .channel('invoices-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*', // Listen to all events (INSERT, UPDATE, DELETE)
+          schema: 'public',
+          table: 'invoices'
+        },
+        (payload) => {
+          console.log('[App] Invoice change detected:', payload.eventType, payload.new || payload.old);
+          // Refresh invoices when any change occurs
+          refreshInvoices();
+        }
+      )
+      .subscribe((status) => {
+        console.log('[App] Real-time subscription status:', status);
+      });
+
+      return () => {
+        console.log('[App] Cleaning up real-time subscription');
+        supabase.removeChannel(channel);
+      };
+  }, [refreshInvoices]);
+
+  // Refresh invoices when POS view becomes active
+  useEffect(() => {
+    if (view === 'pos') {
+      console.log('[App] POS view active, refreshing invoices...');
+      refreshInvoices();
+    }
+  }, [view, refreshInvoices]);
+
+  // Periodic refresh of invoices every 30 seconds when in POS view
+  useEffect(() => {
+    if (view !== 'pos') return;
+    
+    const interval = setInterval(() => {
+      console.log('[App] Periodic invoice refresh...');
+      refreshInvoices();
+    }, 30000); // Every 30 seconds
+    
+    return () => clearInterval(interval);
+  }, [view, refreshInvoices]);
+
   useEffect(() => {
     const fetchInitialData = async () => {
         try {
@@ -284,12 +367,28 @@ const App: React.FC = () => {
 
         } catch (err: any) {
             console.error("Error fetching initial data:", err);
-            setError(err.message || "Could not load data from the database.");
-        } finally {
+            console.error("Error details:", {
+                message: err.message,
+                stack: err.stack,
+                name: err.name
+            });
+            
+            // Set error state - this will show error UI instead of blank screen
+            setError(err.message || "Could not load data from the database. Please check your internet connection and try again.");
             setLoading(false);
+            
+            // Don't rethrow - let error UI handle it
         }
     };
-    fetchInitialData();
+    
+    // Wrap in try-catch for extra safety
+    try {
+        fetchInitialData();
+    } catch (err: any) {
+        console.error("Fatal error in fetchInitialData:", err);
+        setError(err.message || "Failed to initialize application.");
+        setLoading(false);
+    }
 
     const handleBeforeInstallPrompt = (e: Event) => {
         console.log('✅ PWA: Install prompt event received! Browser will show install icon in toolbar', e);
@@ -694,6 +793,10 @@ const App: React.FC = () => {
   
     // Clear any previous order placed info to prevent stale data
     setOrderPlacedInfo(null);
+
+    // CRITICAL: Refresh invoices BEFORE placing order to ensure accurate invoice number
+    console.log('[BILLING] Refreshing invoices before placing order...');
+    await refreshInvoices();
 
     // Create a fresh copy of items to bill
     const itemsToBill = activeOrder.items.map(item => ({ ...item, product: { ...item.product } }));
