@@ -330,8 +330,8 @@ const App: React.FC = () => {
                 setLoading(false);
             }, 5000); // 5 second timeout - show welcome screen faster
             
-            // PHASE 1: Load critical data first (products, categories) - needed for POS
-            console.log('📦 Phase 1: Loading critical data (products, categories)...');
+            // PHASE 1: Load critical data first (products, categories, invoices) - needed for POS/billing
+            console.log('📦 Phase 1: Loading critical data (products, categories, invoices)...');
             
             // Retry function for failed queries
             const retryQuery = async (queryFn: () => Promise<any>, retries = 3, delay = 1000) => {
@@ -357,9 +357,19 @@ const App: React.FC = () => {
                 throw new Error('Query failed after retries');
             };
             
-            const [productsResult, categoriesResult] = await Promise.allSettled([
+            // Calculate date 7 days ago for invoice fetching (optimized - only fetch recent invoices)
+            const sevenDaysAgo = new Date();
+            sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+            sevenDaysAgo.setHours(0, 0, 0, 0);
+            const sevenDaysAgoStr = sevenDaysAgo.toISOString(); // Full ISO timestamp format
+            
+            const [productsResult, categoriesResult, invoicesResult] = await Promise.allSettled([
                 retryQuery(() => supabase.from('products').select('*')),
-                retryQuery(() => supabase.from('categories').select('*').order('display_order', { ascending: true }))
+                retryQuery(() => supabase.from('categories').select('*').order('display_order', { ascending: true })),
+                retryQuery(() => supabase.from('invoices')
+                    .select('*, invoice_items(*)')
+                    .gte('created_at', sevenDaysAgoStr)
+                    .order('id', { ascending: false }))
             ]);
 
             // Process critical data
@@ -383,22 +393,36 @@ const App: React.FC = () => {
                 console.error('❌ Failed to load categories:', errorMsg);
             }
 
+            if (invoicesResult.status === 'fulfilled' && !invoicesResult.value.error) {
+                const invoices = invoicesResult.value.data || [];
+                setAllInvoices(invoices);
+                const dbIdToDailyNumber = calculateDailyInvoiceNumbers(invoices);
+                const mappedBilledItems = invoices.flatMap((invoice: any) => {
+                    const dailyInvoiceNumber = dbIdToDailyNumber.get(invoice.id) || invoice.id;
+                    return mapInvoiceToBilledItems(invoice, dailyInvoiceNumber);
+                });
+                setBilledItems(mappedBilledItems);
+                console.log('✅ Invoices loaded:', invoices.length);
+            } else {
+                const errorMsg = invoicesResult.status === 'rejected' ? invoicesResult.reason?.message : invoicesResult.value?.error?.message;
+                console.warn('⚠️ Failed to load invoices:', errorMsg);
+            }
+
             // Clear timeout and show UI immediately
             clearTimeout(timeoutId);
             setLoading(false);
             console.log('✅ Critical data loaded, UI can render now');
 
             // PHASE 2: Load non-critical data in background (can be slower)
-            console.log('📦 Phase 2: Loading secondary data (expenses, invoices, etc.)...');
+            console.log('📦 Phase 2: Loading secondary data (expenses, stock entries, etc.)...');
+            
             const [
                 expenseItemsData,
                 expensesData,
-                invoicesData,
                 stockEntriesData
             ] = await Promise.allSettled([
                 supabase.from('expense_items').select('*'),
                 supabase.from('expenses').select('*').order('expense_date', { ascending: false }),
-                supabase.from('invoices').select('*, invoice_items(*)').order('id', { ascending: false }).limit(500),
                 supabase.from('purchase_entries').select('*, purchase_items(*)').order('entry_date', { ascending: false })
             ]);
 
@@ -413,20 +437,6 @@ const App: React.FC = () => {
                 setExpenses((expensesData.value.data || []).map((e: any) => ({ ...e, date: new Date(e.expense_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' }) })));
             } else {
                 console.warn('⚠️ Failed to load expenses');
-            }
-
-            if (invoicesData.status === 'fulfilled' && !invoicesData.value.error) {
-                const invoices = invoicesData.value.data || [];
-                setAllInvoices(invoices);
-                const dbIdToDailyNumber = calculateDailyInvoiceNumbers(invoices);
-                const mappedBilledItems = invoices.flatMap((invoice: any) => {
-                    const dailyInvoiceNumber = dbIdToDailyNumber.get(invoice.id) || invoice.id;
-                    return mapInvoiceToBilledItems(invoice, dailyInvoiceNumber);
-                });
-                setBilledItems(mappedBilledItems);
-                console.log('✅ Invoices loaded:', invoices.length);
-            } else {
-                console.warn('⚠️ Failed to load invoices');
             }
 
             if (stockEntriesData.status === 'fulfilled' && !stockEntriesData.value.error) {

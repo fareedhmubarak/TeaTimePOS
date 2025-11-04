@@ -97,28 +97,41 @@ const POSView: React.FC<POSViewProps> = ({
     setMobileSidebarOpen(false);
   };
 
-  // Calculate product sales counts from last 5 days
+  // Calculate product sales counts from last day only (or most recent working day with records)
   const productSalesCounts = useMemo(() => {
     const salesCounts = new Map<string, number>();
     
-    // Calculate date range (last 5 days including today)
+    // Find the most recent working day with records (max 7 days back)
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const fiveDaysAgo = new Date(today);
-    fiveDaysAgo.setDate(today.getDate() - 4); // 4 days ago + today = 5 days
     
-    // Count orders for each product from last 5 days
+    // Find most recent date with records (check today first, then go back up to 7 days)
+    let targetDateStr: string | null = null;
+    for (let i = 0; i < 7; i++) {
+      const checkDate = new Date(today);
+      checkDate.setDate(today.getDate() - i);
+      const checkDateStr = checkDate.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' });
+      
+      // Check if this date has any records (only check once we find a match)
+      const hasRecords = billedItems.some(item => item.date === checkDateStr);
+      if (hasRecords) {
+        targetDateStr = checkDateStr;
+        break;
+      }
+    }
+    
+    // If no records found in last 7 days, use today (will result in 0 counts, but won't break)
+    if (!targetDateStr) {
+      targetDateStr = today.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' });
+    }
+    
+    // Count orders for each product from the target day only
     // Track unique invoice numbers per product to count orders (not quantities)
     const productInvoiceNumbers = new Map<string, Set<number>>();
     
     billedItems.forEach(item => {
-      // Parse date from billedItems (format: M/D/YYYY)
-      const [month, day, year] = item.date.split('/').map(Number);
-      const itemDate = new Date(year, month - 1, day);
-      itemDate.setHours(0, 0, 0, 0);
-      
-      // Check if item is within last 5 days
-      if (itemDate >= fiveDaysAgo && itemDate <= today) {
+      // Only process items from the target day
+      if (item.date === targetDateStr) {
         const productName = item.productName.toLowerCase();
         
         // Track unique invoice numbers for this product
