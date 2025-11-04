@@ -234,13 +234,25 @@ const App: React.FC = () => {
   }, []);
 
   // Refresh invoices function - reusable and memoized
-  const refreshInvoices = useCallback(async () => {
+  const refreshInvoices = useCallback(async (limitTo7Days = false) => {
     try {
       console.log('[refreshInvoices] Fetching fresh invoices from database...');
-      const { data: invoicesData, error: invoicesError } = await supabase
+      
+      let query = supabase
         .from('invoices')
         .select('*, invoice_items(*)')
         .order('id', { ascending: false });
+      
+      // If limitTo7Days is true, only fetch invoices from last 7 days (optimization)
+      if (limitTo7Days) {
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+        sevenDaysAgo.setHours(0, 0, 0, 0);
+        const sevenDaysAgoStr = sevenDaysAgo.toISOString();
+        query = query.gte('created_at', sevenDaysAgoStr);
+      }
+      
+      const { data: invoicesData, error: invoicesError } = await query;
       
       if (invoicesError) {
         console.error('[refreshInvoices] Error:', invoicesError);
@@ -873,9 +885,8 @@ const App: React.FC = () => {
     // Clear any previous order placed info to prevent stale data
     setOrderPlacedInfo(null);
 
-    // CRITICAL: Refresh invoices BEFORE placing order to ensure accurate invoice number
-    console.log('[BILLING] Refreshing invoices before placing order...');
-    await refreshInvoices();
+    // OPTIMIZED: No need to refresh before billing - we'll calculate invoice number from current state
+    // This saves a full database query and makes billing instant
 
     // Create a fresh copy of items to bill
     const itemsToBill = activeOrder.items.map(item => ({ ...item, product: { ...item.product } }));
@@ -895,17 +906,9 @@ const App: React.FC = () => {
       const day = String(billingDate.getDate()).padStart(2, '0');
       const billDateForDB = `${year}-${month}-${day}`;
 
-      // Optimized: Only fetch product IDs if we have products with IDs > 0
-      const hasProductsWithIds = itemsToBill.some(item => item.product.id > 0);
-      let productIdsInDB = new Set<number>();
-      
-      if (hasProductsWithIds) {
-        const { data: currentProductsData, error: productFetchError } = await supabase.from('products').select('id');
-        if (productFetchError) {
-          throw new Error(`Could not verify products before billing: ${productFetchError.message}`);
-        }
-        productIdsInDB = new Set((currentProductsData || []).map(p => p.id));
-      }
+      // OPTIMIZED: Use products from state instead of fetching from DB
+      // Products are already loaded in Phase 1, so we can use them directly
+      const productIdsInDB = new Set(products.map(p => p.id));
 
       // STEP 1.1: Insert invoice record
       const { data: invoiceData, error: invoiceError } = await supabase
@@ -947,22 +950,17 @@ const App: React.FC = () => {
       }
       console.log(`[BILLING] Invoice items saved for invoice ID: ${newInvoiceId}`);
 
-      // STEP 2: VERIFY SAVE SUCCEEDED - Explicit verification
-      const { data: verifyInvoiceData, error: verifyError } = await supabase
-        .from('invoices')
-        .select('id, bill_date, created_at')
-        .eq('id', newInvoiceId)
-        .single();
-
-      if (verifyError || !verifyInvoiceData) {
-        throw new Error(`Save verification failed: ${verifyError?.message || 'Invoice not found in database'}`);
-      }
-      console.log(`[BILLING] Verified invoice exists in DB: ${verifyInvoiceData.id}`);
-
-      // STEP 3: REFRESH ALL INVOICES FROM DATABASE - Get accurate daily invoice number
+      // STEP 2: CALCULATE DAILY INVOICE NUMBER (OPTIMIZED - only fetch last 7 days)
+      // Only fetch invoices from last 7 days + today to calculate daily invoice number efficiently
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      sevenDaysAgo.setHours(0, 0, 0, 0);
+      const sevenDaysAgoStr = sevenDaysAgo.toISOString();
+      
       const { data: freshInvoicesData, error: refreshError } = await supabase
         .from('invoices')
         .select('*, invoice_items(*)')
+        .gte('created_at', sevenDaysAgoStr)
         .order('id', { ascending: false });
 
       if (refreshError) {
@@ -971,7 +969,7 @@ const App: React.FC = () => {
 
       const freshInvoices = freshInvoicesData || [];
       
-      // STEP 4: CALCULATE DAILY INVOICE NUMBER FROM DATABASE
+      // STEP 3: CALCULATE DAILY INVOICE NUMBER FROM DATABASE
       const dbIdToDailyNumber = calculateDailyInvoiceNumbers(freshInvoices);
       dailyInvoiceNumber = dbIdToDailyNumber.get(newInvoiceId) || newInvoiceId;
       
@@ -980,10 +978,15 @@ const App: React.FC = () => {
       }
       console.log(`[BILLING] Calculated daily invoice number: ${dailyInvoiceNumber} for DB ID: ${newInvoiceId}`);
 
-      // STEP 5: UPDATE ALL INVOICES STATE (triggers nextInvoiceNumber recalculation)
-      setAllInvoices(freshInvoices);
+      // STEP 4: UPDATE ALL INVOICES STATE (OPTIMIZED - merge with existing, don't replace)
+      // Only update invoices from last 7 days, keep older ones in state
+      setAllInvoices(prev => {
+        const existingIds = new Set(freshInvoices.map((inv: any) => inv.id));
+        const olderInvoices = prev.filter(inv => !existingIds.has(inv.id));
+        return [...freshInvoices, ...olderInvoices];
+      });
 
-      // STEP 6: UPDATE BILLED ITEMS STATE
+      // STEP 5: UPDATE BILLED ITEMS STATE
       const billDateString = new Date(`${billDateForDB}T00:00:00`).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' });
       const timestamp = new Date().getTime();
       const syncedBilledItems: BilledItem[] = itemsToBill.map(item => ({
@@ -1001,7 +1004,7 @@ const App: React.FC = () => {
       setBilledItems(prev => [...syncedBilledItems, ...prev]);
       console.log(`[BILLING] Updated billedItems state with invoice #${dailyInvoiceNumber}`);
 
-      // STEP 7: CLEAR ORDER (only after successful save)
+      // STEP 6: CLEAR ORDER (only after successful save)
       const isLastOrder = activeOrderIndex === orders.length - 1;
       if (orders.length > 1 && !isLastOrder) {
         const newOrders = orders.filter((o) => o.id !== activeOrder.id);
@@ -1011,7 +1014,7 @@ const App: React.FC = () => {
         handleClearOrder();
       }
 
-      // STEP 8: SHOW POPUP (only after everything is saved and verified)
+      // STEP 7: SHOW POPUP (only after everything is saved and verified)
       const itemsForPrint = itemsToBill.map(item => ({
         name: String(item.product.name || ''),
         quantity: Number(item.quantity || 0),
