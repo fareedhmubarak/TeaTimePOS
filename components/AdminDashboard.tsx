@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BilledItem, Expense, StockEntry, Product, ExpenseItem } from '../types.ts';
+import { BilledItem, Expense, StockEntry, Product, ExpenseItem, Category } from '../types.ts';
 import ReportsPage from './ReportsPage.tsx';
 import StockManagementPage from './StockManagementPage.tsx';
 import ProductManagementPage from './ProductManagementPage.tsx';
@@ -14,6 +14,7 @@ interface AdminDashboardProps {
   expenses: Expense[];
   stockEntries: StockEntry[];
   products: Product[];
+  categories: Category[];
   expenseItems: ExpenseItem[];
   onAddStockEntry: (entry: Omit<StockEntry, 'id' | 'totalCost'>) => void;
   onUpdateStockEntry: (entry: StockEntry) => void;
@@ -28,17 +29,19 @@ interface AdminDashboardProps {
   onViewInvoice?: (invoiceNumber: number) => void;
   installPromptEvent?: Event | null;
   onInstallClick?: () => void;
+  onCategoryAdded?: () => void;
 }
 
 type AdminTab = 'reports' | 'expenses' | 'items' | 'expenseItems' | 'database' | 'printer' | 'categories';
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ 
-  billedItems, expenses, stockEntries, products, expenseItems,
+  billedItems, expenses, stockEntries, products, categories, expenseItems,
   onAddStockEntry, onUpdateStockEntry, onDeleteStockEntry, 
   onAddProduct, onUpdateProduct, onDeleteProduct,
   onAddExpenseItem, onUpdateExpenseItem, onDeleteExpenseItem,
   onNavigate, onViewInvoice,
   installPromptEvent, onInstallClick,
+  onCategoryAdded,
 }) => {
   const [activeTab, setActiveTab] = useState<AdminTab>('reports');
   
@@ -63,7 +66,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   onDeleteStockEntry={onDeleteStockEntry} 
                 />;
       case 'items':
-        return <ProductManagementPage 
+        return <ProductManagementPage
+            categories={categories}
+            onCategoryAdded={onCategoryAdded} 
                   products={products}
                   onAddProduct={onAddProduct}
                   onUpdateProduct={onUpdateProduct}

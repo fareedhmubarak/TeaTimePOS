@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Product, CartItem } from '../types.ts';
 import ProductCard from './ProductCard.tsx';
 import { SearchIcon, FilterIcon } from './Icons.tsx';
@@ -9,12 +9,31 @@ interface ProductGridProps {
   searchTerm: string;
   onSearchChange: (term: string) => void;
   activeOrderItems: CartItem[];
+  onRetryLoadProducts?: () => Promise<void>;
 }
 
-const ProductGrid: React.FC<ProductGridProps> = ({ products, onAddItem, searchTerm, onSearchChange, activeOrderItems }) => {
+const ProductGrid: React.FC<ProductGridProps> = ({ products, onAddItem, searchTerm, onSearchChange, activeOrderItems, onRetryLoadProducts }) => {
+  const [isRetrying, setIsRetrying] = useState(false);
   const filteredProducts = products.filter(p => 
     p.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const handleRetry = async () => {
+    if (onRetryLoadProducts) {
+      setIsRetrying(true);
+      try {
+        await onRetryLoadProducts();
+      } catch (error) {
+        console.error('Failed to retry loading products:', error);
+        alert('Failed to load products. Please check your connection and try again.');
+      } finally {
+        setIsRetrying(false);
+      }
+    } else {
+      // Fallback to page reload if no retry function provided
+      window.location.reload();
+    }
+  };
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden h-full">
@@ -41,10 +60,11 @@ const ProductGrid: React.FC<ProductGridProps> = ({ products, onAddItem, searchTe
             <p className="text-lg font-semibold mb-2">No Products Loaded</p>
             <p className="text-sm text-center mb-4">Products could not be loaded from the database.</p>
             <button 
-              onClick={() => window.location.reload()} 
-              className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
+              onClick={handleRetry}
+              disabled={isRetrying}
+              className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:bg-purple-400 disabled:cursor-not-allowed"
             >
-              Refresh Page
+              {isRetrying ? 'Loading...' : 'Retry Loading Products'}
             </button>
           </div>
         ) : filteredProducts.length === 0 ? (
@@ -52,7 +72,7 @@ const ProductGrid: React.FC<ProductGridProps> = ({ products, onAddItem, searchTe
             <p className="text-lg">No products match "{searchTerm}"</p>
           </div>
         ) : (
-          <div className="grid grid-cols-4 gap-2">
+          <div className="grid grid-cols-4 gap-2 auto-rows-max">
             {filteredProducts.map((product) => (
                <ProductCard 
                   key={product.id} 

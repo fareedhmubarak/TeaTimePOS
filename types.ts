@@ -11,6 +11,7 @@ export interface Product {
   profit: number;
   category: string;
   imageUrl: string;
+  displayOrder?: number;
 }
 
 export interface CartItem {

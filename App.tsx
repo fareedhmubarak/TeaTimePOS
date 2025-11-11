@@ -5,7 +5,6 @@ import POSView from './components/POSView.tsx';
 import AdminDashboard from './components/AdminDashboard.tsx';
 import ExpenseModal from './components/ExpenseModal.tsx';
 import PasswordModal from './components/PasswordModal.tsx';
-import OrderPlacedModal from './components/OrderPlacedModal.tsx';
 import UpdateNotification from './components/UpdateNotification.tsx';
 import PrinterSelectionModal from './components/PrinterSelectionModal.tsx';
 import { supabase } from './supabaseClient.ts';
@@ -107,7 +106,7 @@ const mapPurchaseEntryToStockEntry = (entry: any): StockEntry => ({
 });
 
 
-const ADMIN_PASSWORD = '08101990';
+const ADMIN_PASSWORD = '0830';
 
 const App: React.FC = () => {
   const [view, setView] = useState<'home' | 'pos' | 'admin'>('home');
@@ -117,8 +116,6 @@ const App: React.FC = () => {
   const [pendingPrintData, setPendingPrintData] = useState<PrintData | null>(null);
   const [isPrinting, setIsPrinting] = useState(false);
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
-  const [orderPlacedInfo, setOrderPlacedInfo] = useState<{ invoiceNumber: number; totalAmount: number; items: Array<{ name: string; quantity: number; price: number }> } | null>(null);
-  
   // App State
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -131,7 +128,17 @@ const App: React.FC = () => {
   const [activeOrderIndex, setActiveOrderIndex] = useState(0);
   const [viewedInvoiceNumber, setViewedInvoiceNumber] = useState<number | null>(null);
   const [editingInvoiceNumber, setEditingInvoiceNumber] = useState<number | null>(null);
-  const [billingDate, setBillingDate] = useState(new Date());
+  // Get today's date in IST (India Standard Time)
+  // Uses browser's local timezone (should be IST if user is in India)
+  // This ensures the billing date matches the actual date in India
+  const getTodayISTDate = () => {
+    const now = new Date();
+    // Use local date components (browser timezone, should be IST in India)
+    // Set time to noon to avoid timezone edge cases
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12, 0, 0);
+  };
+  
+  const [billingDate, setBillingDate] = useState(getTodayISTDate());
   
   // Data State (from Supabase)
   const [products, setProducts] = useState<Product[]>([]);
@@ -142,16 +149,6 @@ const App: React.FC = () => {
   const [expenseItems, setExpenseItems] = useState<ExpenseItem[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
 
-  // Debug: Log when orderPlacedInfo changes
-  useEffect(() => {
-    console.log('=== orderPlacedInfo STATE CHANGED ===');
-    console.log('Current value:', orderPlacedInfo);
-    console.log('Is truthy?', !!orderPlacedInfo);
-    if (orderPlacedInfo) {
-      console.log('Invoice #:', orderPlacedInfo.invoiceNumber);
-      console.log('Items count:', orderPlacedInfo.items?.length || 0);
-    }
-  }, [orderPlacedInfo]);
 
   // Auto-print when order is placed if "Save & Print Mode" is enabled
   // DISABLED: User wants manual print only, no auto-print
@@ -233,24 +230,58 @@ const App: React.FC = () => {
     }
   }, []);
 
+  // Retry loading products function - for ProductGrid retry button
+  const retryLoadProducts = useCallback(async () => {
+    try {
+      console.log('[retryLoadProducts] Retrying to load products from database...');
+      const { data, error } = await supabase.from('products').select('*');
+      
+      if (error) {
+        console.error('[retryLoadProducts] Error:', error);
+        throw new Error(error.message || 'Failed to load products');
+      }
+      
+      const loadedProducts = (data || []).map((p: any) => ({ 
+        ...p, 
+        imageUrl: p.image_url,
+        displayOrder: p.display_order || 0
+      }));
+      setProducts(loadedProducts);
+      console.log(`[retryLoadProducts] Successfully loaded ${loadedProducts.length} products`);
+    } catch (error: any) {
+      console.error('[retryLoadProducts] Failed to retry loading products:', error);
+      throw error; // Re-throw so ProductGrid can handle it
+    }
+  }, []);
+
   // Refresh invoices function - reusable and memoized
   const refreshInvoices = useCallback(async (limitTo7Days = false) => {
     try {
       console.log('[refreshInvoices] Fetching fresh invoices from database...');
       
+      // Always fetch ALL invoices for today (no limit) to ensure accurate invoice numbering
+      const todayIST = getTodayISTDate();
+      const todayDateStr = `${todayIST.getFullYear()}-${String(todayIST.getMonth() + 1).padStart(2, '0')}-${String(todayIST.getDate()).padStart(2, '0')}`;
+      
       let query = supabase
         .from('invoices')
-        .select('*, invoice_items(*)')
-        .order('id', { ascending: false });
+        .select('*, invoice_items(*)');
       
-      // If limitTo7Days is true, only fetch invoices from last 7 days (optimization)
+      // If limitTo7Days is true, fetch today + last 7 days
+      // Otherwise, fetch ALL invoices (for accurate numbering)
       if (limitTo7Days) {
         const sevenDaysAgo = new Date();
         sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
         sevenDaysAgo.setHours(0, 0, 0, 0);
         const sevenDaysAgoStr = sevenDaysAgo.toISOString();
-        query = query.gte('created_at', sevenDaysAgoStr);
+        // Fetch ALL invoices for today OR invoices from last 7 days
+        query = query.or(`bill_date.eq.${todayDateStr},created_at.gte.${sevenDaysAgoStr}`);
+      } else {
+        // Fetch ALL invoices - needed for accurate invoice numbering
+        // No filter - get everything
       }
+      
+      query = query.order('id', { ascending: false });
       
       const { data: invoicesData, error: invoicesError } = await query;
       
@@ -262,8 +293,19 @@ const App: React.FC = () => {
       const invoices = invoicesData || [];
       console.log(`[refreshInvoices] Fetched ${invoices.length} invoices`);
       
-      // Update all invoices state
-      setAllInvoices(invoices);
+      // Count invoices for today to verify we got them all
+      const todayInvoices = invoices.filter((inv: any) => {
+        const invDate = inv.bill_date || inv.created_at.split('T')[0];
+        return invDate === todayDateStr;
+      });
+      console.log(`[refreshInvoices] Found ${todayInvoices.length} invoices for today (${todayDateStr})`);
+      
+      // Update all invoices state - merge with existing to avoid losing data
+      setAllInvoices(prev => {
+        const existingIds = new Set(invoices.map((inv: any) => inv.id));
+        const olderInvoices = prev.filter(inv => !existingIds.has(inv.id));
+        return [...invoices, ...olderInvoices];
+      });
       
       // Recalculate billed items with fresh data
       const dbIdToDailyNumber = calculateDailyInvoiceNumbers(invoices);
@@ -271,7 +313,13 @@ const App: React.FC = () => {
         const dailyInvoiceNumber = dbIdToDailyNumber.get(invoice.id) || invoice.id;
         return mapInvoiceToBilledItems(invoice, dailyInvoiceNumber);
       });
-      setBilledItems(mappedBilledItems);
+      
+      // Merge billed items - keep existing ones, update/remove changed ones
+      setBilledItems(prev => {
+        const invoiceIds = new Set(invoices.map((inv: any) => inv.id));
+        const otherItems = prev.filter(item => !item.invoiceDbId || !invoiceIds.has(item.invoiceDbId));
+        return [...mappedBilledItems, ...otherItems];
+      });
       
       console.log('[refreshInvoices] Invoices refreshed successfully');
     } catch (error) {
@@ -308,13 +356,60 @@ const App: React.FC = () => {
       };
   }, [refreshInvoices]);
 
-  // Refresh invoices when POS view becomes active
+  // Auto-update billing date at midnight IST (12:00 AM IST)
+  useEffect(() => {
+    const checkAndUpdateBillingDate = () => {
+      const todayIST = getTodayISTDate();
+      const currentBillingDate = new Date(billingDate.getFullYear(), billingDate.getMonth(), billingDate.getDate(), 12, 0, 0);
+      
+      // Compare dates (year, month, day only) - check if date changed at midnight IST
+      if (todayIST.getFullYear() !== currentBillingDate.getFullYear() ||
+          todayIST.getMonth() !== currentBillingDate.getMonth() ||
+          todayIST.getDate() !== currentBillingDate.getDate()) {
+        console.log('[App] Date changed detected (midnight IST), updating billing date from', 
+          currentBillingDate.toLocaleDateString(), 'to', todayIST.toLocaleDateString());
+        setBillingDate(todayIST);
+      }
+    };
+    
+    // Check immediately
+    checkAndUpdateBillingDate();
+    
+    // Check every minute to catch midnight IST transition (12:00 AM IST = 6:30 PM UTC previous day)
+    const interval = setInterval(checkAndUpdateBillingDate, 60000); // Every minute
+    
+    return () => clearInterval(interval);
+  }, [billingDate]);
+
+  // Refresh invoices and ensure products are loaded when POS view becomes active
   useEffect(() => {
     if (view === 'pos') {
-      console.log('[App] POS view active, refreshing invoices...');
-      refreshInvoices();
+      console.log('[App] POS view active, refreshing invoices and products...');
+      
+      // Ensure billing date is set to today (IST)
+      const todayIST = getTodayISTDate();
+      const currentBillingDate = new Date(billingDate.getFullYear(), billingDate.getMonth(), billingDate.getDate(), 12, 0, 0);
+      if (todayIST.getFullYear() !== currentBillingDate.getFullYear() ||
+          todayIST.getMonth() !== currentBillingDate.getMonth() ||
+          todayIST.getDate() !== currentBillingDate.getDate()) {
+        console.log('[App] Updating billing date to today (IST) when entering POS view');
+        setBillingDate(todayIST);
+      }
+      
+      // Always refresh invoices to get ALL invoices for today (critical for accurate numbering)
+      refreshInvoices(false).catch((error) => {
+        console.error('[App] Failed to refresh invoices:', error);
+      });
+      
+      // If products are empty, automatically retry loading them
+      if (products.length === 0) {
+        console.log('[App] No products found, automatically retrying to load products...');
+        retryLoadProducts().catch((error) => {
+          console.error('[App] Auto-retry failed:', error);
+        });
+      }
     }
-  }, [view, refreshInvoices]);
+  }, [view, refreshInvoices, products.length, retryLoadProducts, billingDate]);
 
   // Periodic refresh of invoices every 30 seconds when in POS view
   useEffect(() => {
@@ -337,30 +432,33 @@ const App: React.FC = () => {
             console.log('🔄 Starting data fetch...');
             
             // Set a timeout to ensure loading is cleared even if something hangs
+            // Increased timeout to allow all data to load completely
             const timeoutId = setTimeout(() => {
                 console.warn('⚠️ Data fetch taking too long, forcing loading to false');
                 setLoading(false);
-            }, 5000); // 5 second timeout - show welcome screen faster
+            }, 30000); // 30 second timeout - allow time for all data to load
             
             // PHASE 1: Load critical data first (products, categories, invoices) - needed for POS/billing
             console.log('📦 Phase 1: Loading critical data (products, categories, invoices)...');
             
-            // Retry function for failed queries
-            const retryQuery = async (queryFn: () => Promise<any>, retries = 3, delay = 1000) => {
+            // Retry function for failed queries - more retries for reliability
+            const retryQuery = async (queryFn: () => Promise<any>, retries = 3, delay = 1000, isProducts = false) => {
                 for (let i = 0; i < retries; i++) {
                     try {
                         const result = await queryFn();
                         if (!result.error) return result;
                         console.error(`Query error (attempt ${i + 1}/${retries}):`, result.error);
                         if (i < retries - 1) {
-                            console.log(`⚠️ Query failed, retrying... (${i + 1}/${retries})`);
-                            await new Promise(resolve => setTimeout(resolve, delay * (i + 1)));
+                            const waitTime = delay * (i + 1); // Increasing delay
+                            console.log(`⚠️ Query failed, retrying in ${waitTime}ms... (${i + 1}/${retries})`);
+                            await new Promise(resolve => setTimeout(resolve, waitTime));
                         }
                     } catch (err: any) {
                         console.error(`Query exception (attempt ${i + 1}/${retries}):`, err);
                         if (i < retries - 1) {
-                            console.log(`⚠️ Query error, retrying... (${i + 1}/${retries})`);
-                            await new Promise(resolve => setTimeout(resolve, delay * (i + 1)));
+                            const waitTime = delay * (i + 1); // Increasing delay
+                            console.log(`⚠️ Query error, retrying in ${waitTime}ms... (${i + 1}/${retries})`);
+                            await new Promise(resolve => setTimeout(resolve, waitTime));
                         } else {
                             throw err;
                         }
@@ -375,22 +473,53 @@ const App: React.FC = () => {
             sevenDaysAgo.setHours(0, 0, 0, 0);
             const sevenDaysAgoStr = sevenDaysAgo.toISOString(); // Full ISO timestamp format
             
+            // Load critical data in parallel - ensure all data loads before showing UI
+            // For invoices: fetch ALL invoices for today + last 7 days (needed for accurate invoice numbering)
+            const todayIST = getTodayISTDate();
+            const todayDateStr = `${todayIST.getFullYear()}-${String(todayIST.getMonth() + 1).padStart(2, '0')}-${String(todayIST.getDate()).padStart(2, '0')}`;
+            
             const [productsResult, categoriesResult, invoicesResult] = await Promise.allSettled([
-                retryQuery(() => supabase.from('products').select('*')),
-                retryQuery(() => supabase.from('categories').select('*').order('display_order', { ascending: true })),
-                retryQuery(() => supabase.from('invoices')
-                    .select('*, invoice_items(*)')
-                    .gte('created_at', sevenDaysAgoStr)
-                    .order('id', { ascending: false }))
+                retryQuery(() => supabase.from('products').select('*'), 3, 1000, true), // 3 retries, 1s delay
+                retryQuery(() => supabase.from('categories').select('*').order('display_order', { ascending: true }), 3, 1000),
+                retryQuery(() => {
+                    // Fetch ALL invoices for today (no limit) + last 7 days for context
+                    return supabase.from('invoices')
+                        .select('*, invoice_items(*)')
+                        .or(`bill_date.eq.${todayDateStr},created_at.gte.${sevenDaysAgoStr}`)
+                        .order('id', { ascending: false });
+                }, 3, 1000)
             ]);
 
-            // Process critical data
+            // Process critical data - products are essential, retry if failed
             if (productsResult.status === 'fulfilled' && !productsResult.value.error) {
-                setProducts((productsResult.value.data || []).map((p: any) => ({ ...p, imageUrl: p.image_url })));
-                console.log('✅ Products loaded:', productsResult.value.data?.length || 0);
+                const loadedProducts = (productsResult.value.data || []).map((p: any) => ({ 
+                    ...p, 
+                    imageUrl: p.image_url,
+                    displayOrder: p.display_order || 0
+                }));
+                setProducts(loadedProducts);
+                console.log('✅ Products loaded:', loadedProducts.length);
             } else {
                 const errorMsg = productsResult.status === 'rejected' ? productsResult.reason?.message : productsResult.value?.error?.message;
                 console.error('❌ Failed to load products:', errorMsg);
+                // Try one more time with a simple query (no retry wrapper)
+                console.log('🔄 Attempting final product load retry...');
+                try {
+                    const { data, error } = await supabase.from('products').select('*');
+                    if (!error && data) {
+                        const loadedProducts = data.map((p: any) => ({ 
+                            ...p, 
+                            imageUrl: p.image_url,
+                            displayOrder: p.display_order || 0
+                        }));
+                        setProducts(loadedProducts);
+                        console.log('✅ Products loaded on final retry:', loadedProducts.length);
+                    } else {
+                        console.error('❌ Final retry also failed:', error?.message);
+                    }
+                } catch (finalError: any) {
+                    console.error('❌ Final retry exception:', finalError);
+                }
             }
 
             if (categoriesResult.status === 'fulfilled' && !categoriesResult.value.error) {
@@ -414,18 +543,19 @@ const App: React.FC = () => {
                     return mapInvoiceToBilledItems(invoice, dailyInvoiceNumber);
                 });
                 setBilledItems(mappedBilledItems);
-                console.log('✅ Invoices loaded:', invoices.length);
+                
+                // Log how many invoices for today to verify we got them all
+                const todayInvoices = invoices.filter((inv: any) => {
+                    const invDate = inv.bill_date || inv.created_at.split('T')[0];
+                    return invDate === todayDateStr;
+                });
+                console.log('✅ Invoices loaded:', invoices.length, `(${todayInvoices.length} for today)`);
             } else {
                 const errorMsg = invoicesResult.status === 'rejected' ? invoicesResult.reason?.message : invoicesResult.value?.error?.message;
                 console.warn('⚠️ Failed to load invoices:', errorMsg);
             }
 
-            // Clear timeout and show UI immediately
-            clearTimeout(timeoutId);
-            setLoading(false);
-            console.log('✅ Critical data loaded, UI can render now');
-
-            // PHASE 2: Load non-critical data in background (can be slower)
+            // PHASE 2: Load ALL data before showing UI (both billing and admin screens need this data)
             console.log('📦 Phase 2: Loading secondary data (expenses, stock entries, etc.)...');
             
             const [
@@ -433,31 +563,37 @@ const App: React.FC = () => {
                 expensesData,
                 stockEntriesData
             ] = await Promise.allSettled([
-                supabase.from('expense_items').select('*'),
-                supabase.from('expenses').select('*').order('expense_date', { ascending: false }),
-                supabase.from('purchase_entries').select('*, purchase_items(*)').order('entry_date', { ascending: false })
+                retryQuery(() => supabase.from('expense_items').select('*'), 3, 1000),
+                retryQuery(() => supabase.from('expenses').select('*').order('expense_date', { ascending: false }), 3, 1000),
+                retryQuery(() => supabase.from('purchase_entries').select('*, purchase_items(*)').order('entry_date', { ascending: false }), 3, 1000)
             ]);
 
             // Process secondary data
             if (expenseItemsData.status === 'fulfilled' && !expenseItemsData.value.error) {
                 setExpenseItems((expenseItemsData.value.data || []).map((e: any) => ({ ...e, allowSubItems: e.allow_sub_items, subItems: e.sub_items })));
+                console.log('✅ Expense items loaded:', expenseItemsData.value.data?.length || 0);
             } else {
                 console.warn('⚠️ Failed to load expense items');
             }
 
             if (expensesData.status === 'fulfilled' && !expensesData.value.error) {
                 setExpenses((expensesData.value.data || []).map((e: any) => ({ ...e, date: new Date(e.expense_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' }) })));
+                console.log('✅ Expenses loaded:', expensesData.value.data?.length || 0);
             } else {
                 console.warn('⚠️ Failed to load expenses');
             }
 
             if (stockEntriesData.status === 'fulfilled' && !stockEntriesData.value.error) {
                 setStockEntries((stockEntriesData.value.data || []).map(mapPurchaseEntryToStockEntry));
+                console.log('✅ Stock entries loaded:', stockEntriesData.value.data?.length || 0);
             } else {
                 console.warn('⚠️ Failed to load stock entries');
             }
 
-            console.log('✅ All data loading complete');
+            // Clear timeout and show UI only after ALL data is loaded
+            clearTimeout(timeoutId);
+            setLoading(false);
+            console.log('✅ All data loading complete - UI can render now');
 
         } catch (err: any) {
             console.error("❌ Fatal error fetching initial data:", err);
@@ -607,42 +743,70 @@ const App: React.FC = () => {
   };
   
   const nextInvoiceNumber = useMemo(() => {
-    // Format the current billing date to match the format stored in billedItems
-    const selectedDateString = billingDate.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' });
-    
-    // Convert billing date to database format (YYYY-MM-DD) using local date, not UTC
+    // Use LOCAL date components to avoid timezone issues
     const year = billingDate.getFullYear();
-    const month = String(billingDate.getMonth() + 1).padStart(2, '0');
-    const day = String(billingDate.getDate()).padStart(2, '0');
-    const billingDateForDB = `${year}-${month}-${day}`;
+    const month = billingDate.getMonth() + 1;
+    const day = billingDate.getDate();
+    
+    // Create billing date string in database format (YYYY-MM-DD) using LOCAL date
+    const billingDateForDB = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    
+    // Format for display comparison (M/D/YYYY)
+    const selectedDateString = `${month}/${day}/${year}`;
 
-    // Count invoices from allInvoices (more accurate than billedItems)
-    // This ensures we count ALL invoices for today, even if they have no items
-    const invoicesForToday = allInvoices.filter(invoice => {
-        const invoiceDate = invoice.bill_date || invoice.created_at.split('T')[0];
-        return invoiceDate === billingDateForDB;
+    console.log('[nextInvoiceNumber] Calculating for billing date:', billingDateForDB, '(', selectedDateString, ')');
+    console.log('[nextInvoiceNumber] Total invoices in state:', allInvoices.length);
+
+    // Count invoices from allInvoices - MUST use bill_date, not created_at
+    // This ensures we count ALL invoices for the selected billing date
+    const invoicesForSelectedDate = allInvoices.filter(invoice => {
+        // ALWAYS prefer bill_date if it exists (it's the actual billing date)
+        // Only fall back to created_at date if bill_date is missing (legacy data)
+        let invoiceDateStr: string;
+        if (invoice.bill_date) {
+            // bill_date is DATE type (YYYY-MM-DD), use it directly
+            invoiceDateStr = invoice.bill_date;
+        } else {
+            // Fallback: extract date from created_at (TIMESTAMPTZ)
+            // Parse as local date to avoid timezone shifts
+            const createdDate = new Date(invoice.created_at);
+            const localYear = createdDate.getFullYear();
+            const localMonth = createdDate.getMonth() + 1;
+            const localDay = createdDate.getDate();
+            invoiceDateStr = `${localYear}-${String(localMonth).padStart(2, '0')}-${String(localDay).padStart(2, '0')}`;
+        }
+        
+        const matches = invoiceDateStr === billingDateForDB;
+        if (matches) {
+            console.log('[nextInvoiceNumber] Found matching invoice:', invoice.id, 'with date:', invoiceDateStr);
+        }
+        return matches;
     });
 
-    if (invoicesForToday.length === 0) {
+    console.log('[nextInvoiceNumber] Invoices for selected date:', invoicesForSelectedDate.length);
+
+    if (invoicesForSelectedDate.length === 0) {
+        console.log('[nextInvoiceNumber] No invoices found, starting from 1');
         return 1; // Start from 1 for a new day
     }
 
-    // Calculate daily invoice numbers for today's invoices
-    const dbIdToDailyNumber = calculateDailyInvoiceNumbers(invoicesForToday);
+    // Calculate daily invoice numbers for the selected date's invoices
+    const dbIdToDailyNumber = calculateDailyInvoiceNumbers(invoicesForSelectedDate);
     
     // Find the maximum daily invoice number
     const maxDailyNumber = Math.max(...Array.from(dbIdToDailyNumber.values()));
+    console.log('[nextInvoiceNumber] Max daily invoice number from DB:', maxDailyNumber);
     
     // Also check billedItems for any 'hold' status items (optimistic updates)
     const invoicesForDate = billedItems.filter(item => item.date === selectedDateString);
     const holdInvoicesForDate = invoicesForDate.filter(item => item.status === 'hold');
     const maxHoldInvoiceNumber = holdInvoicesForDate.length > 0 
-      ? Math.max(...holdInvoicesForDate.map(i => i.invoiceNumber))
+      ? Math.max(...holdInvoicesForDate.map(item => item.invoiceNumber))
       : 0;
     
-    // Return the next number after the maximum found
-    return Math.max(maxDailyNumber, maxHoldInvoiceNumber) + 1;
-
+    const nextNumber = Math.max(maxDailyNumber, maxHoldInvoiceNumber) + 1;
+    console.log('[nextInvoiceNumber] Next invoice number:', nextNumber);
+    return nextNumber;
   }, [billedItems, billingDate, allInvoices]);
 
   const handleNavigate = (newView: 'home' | 'pos' | 'admin') => {
@@ -882,9 +1046,6 @@ const App: React.FC = () => {
       return;
     }
   
-    // Clear any previous order placed info to prevent stale data
-    setOrderPlacedInfo(null);
-
     // OPTIMIZED: No need to refresh before billing - we'll calculate invoice number from current state
     // This saves a full database query and makes billing instant
 
@@ -900,11 +1061,24 @@ const App: React.FC = () => {
       const total_amount = itemsToBill.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
       const total_profit = itemsToBill.reduce((sum, item) => sum + item.product.profit * item.quantity, 0);
       
-      // Use LOCAL date parts for bill_date to avoid timezone shifts (YYYY-MM-DD)
-      const year = billingDate.getFullYear();
-      const month = String(billingDate.getMonth() + 1).padStart(2, '0');
-      const day = String(billingDate.getDate()).padStart(2, '0');
-      const billDateForDB = `${year}-${month}-${day}`;
+      // CRITICAL: Use ACTUAL current date in IST for bill_date
+      // This ensures bill_date always matches the actual date when invoice is created (IST)
+      // Both created_at (timestamp) and bill_date (date) should reflect the same date in IST
+      const now = new Date();
+      
+      // Get local date components (browser timezone, should be IST in India)
+      const year = now.getFullYear();
+      const month = now.getMonth() + 1; // getMonth() returns 0-11
+      const day = now.getDate();
+      
+      // Format as YYYY-MM-DD for database
+      const billDateForDB = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      
+      // Also update billingDate state to match actual IST date
+      const actualISTDate = new Date(year, month - 1, day, 12, 0, 0);
+      setBillingDate(actualISTDate);
+      
+      console.log('[handleBillOrder] Billing with date (IST):', billDateForDB, 'at', now.toLocaleString('en-IN'));
 
       // OPTIMIZED: Use products from state instead of fetching from DB
       // Products are already loaded in Phase 1, so we can use them directly
@@ -950,39 +1124,41 @@ const App: React.FC = () => {
       }
       console.log(`[BILLING] Invoice items saved for invoice ID: ${newInvoiceId}`);
 
-      // STEP 2: CALCULATE DAILY INVOICE NUMBER (OPTIMIZED - only fetch last 7 days)
-      // Only fetch invoices from last 7 days + today to calculate daily invoice number efficiently
-      const sevenDaysAgo = new Date();
-      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-      sevenDaysAgo.setHours(0, 0, 0, 0);
-      const sevenDaysAgoStr = sevenDaysAgo.toISOString();
-      
+      // STEP 2: CALCULATE DAILY INVOICE NUMBER
+      // Fetch ALL invoices for the billing date (not just last 7 days) to ensure accurate numbering
+      // This is critical to prevent invoice number resets
       const { data: freshInvoicesData, error: refreshError } = await supabase
         .from('invoices')
         .select('*, invoice_items(*)')
-        .gte('created_at', sevenDaysAgoStr)
-        .order('id', { ascending: false });
+        .eq('bill_date', billDateForDB) // Filter by exact billing date - CRITICAL for accurate numbering
+        .order('id', { ascending: true }); // Sort ascending to get creation order
 
       if (refreshError) {
         throw new Error(`Failed to refresh invoices: ${refreshError.message}`);
       }
 
       const freshInvoices = freshInvoicesData || [];
+      console.log(`[handleBillOrder] Found ${freshInvoices.length} invoices for date ${billDateForDB}`);
       
       // STEP 3: CALCULATE DAILY INVOICE NUMBER FROM DATABASE
+      // Use calculateDailyInvoiceNumbers which groups by date and assigns sequential numbers
       const dbIdToDailyNumber = calculateDailyInvoiceNumbers(freshInvoices);
-      dailyInvoiceNumber = dbIdToDailyNumber.get(newInvoiceId) || newInvoiceId;
+      dailyInvoiceNumber = dbIdToDailyNumber.get(newInvoiceId) || freshInvoices.length;
       
+      // Safety check: if calculation failed, use the count as fallback
       if (!dailyInvoiceNumber || dailyInvoiceNumber <= 0) {
-        throw new Error(`Failed to calculate daily invoice number for invoice ID ${newInvoiceId}`);
+        console.warn(`[handleBillOrder] Invoice number calculation failed, using count: ${freshInvoices.length}`);
+        dailyInvoiceNumber = freshInvoices.length;
       }
+      
       console.log(`[BILLING] Calculated daily invoice number: ${dailyInvoiceNumber} for DB ID: ${newInvoiceId}`);
 
       // STEP 4: UPDATE ALL INVOICES STATE (OPTIMIZED - merge with existing, don't replace)
-      // Only update invoices from last 7 days, keep older ones in state
+      // Merge fresh invoices for the billing date with existing invoices
       setAllInvoices(prev => {
         const existingIds = new Set(freshInvoices.map((inv: any) => inv.id));
         const olderInvoices = prev.filter(inv => !existingIds.has(inv.id));
+        // Fresh invoices first (most recent), then older ones
         return [...freshInvoices, ...olderInvoices];
       });
 
@@ -1004,29 +1180,56 @@ const App: React.FC = () => {
       setBilledItems(prev => [...syncedBilledItems, ...prev]);
       console.log(`[BILLING] Updated billedItems state with invoice #${dailyInvoiceNumber}`);
 
-      // STEP 6: CLEAR ORDER (only after successful save)
-      const isLastOrder = activeOrderIndex === orders.length - 1;
-      if (orders.length > 1 && !isLastOrder) {
-        const newOrders = orders.filter((o) => o.id !== activeOrder.id);
-        setOrders(newOrders);
-        setActiveOrderIndex(newOrders.length - 1);
-      } else {
-        handleClearOrder();
-      }
-
-      // STEP 7: SHOW POPUP (only after everything is saved and verified)
+      // STEP 6: PREPARE PRINT DATA
       const itemsForPrint = itemsToBill.map(item => ({
         name: String(item.product.name || ''),
         quantity: Number(item.quantity || 0),
         price: Number((item.product.price * item.quantity).toFixed(2))
       }));
-      
-      setOrderPlacedInfo({
-        invoiceNumber: dailyInvoiceNumber,
-        totalAmount: Number(total_amount.toFixed(2)),
-        items: [...itemsForPrint]
+
+      const printDateString = new Date(`${billDateForDB}T00:00:00`).toLocaleDateString('en-US', { 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric'
       });
-      console.log(`[BILLING] Order placed modal shown for invoice #${dailyInvoiceNumber}. Next invoice should be ${dailyInvoiceNumber + 1}`);
+      const timeStr = new Date().toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+
+      const printData: PrintData = {
+        invoiceNumber: dailyInvoiceNumber,
+        date: printDateString,
+        time: timeStr,
+        items: itemsForPrint,
+        totalAmount: Number(total_amount.toFixed(2))
+      };
+
+      // STEP 7: CLEAR ORDER (only after successful save)
+      const isLastOrder = activeOrderIndex === orders.length - 1;
+      const isHeldOrder = orders.length > 1 && !isLastOrder;
+      
+      if (isHeldOrder) {
+        // This is a held order being billed - remove it and move to next
+        const newOrders = orders.filter((o) => o.id !== activeOrder.id);
+        setOrders(newOrders);
+        setActiveOrderIndex(newOrders.length - 1);
+        console.log(`[BILLING] Held order billed directly. Invoice #${dailyInvoiceNumber}`);
+      } else {
+        // This is a regular order - clear it
+        handleClearOrder();
+      }
+
+      // STEP 8: PRINT DIRECTLY (no popup)
+      try {
+        console.log(`[BILLING] Printing invoice #${dailyInvoiceNumber} directly...`);
+        await printReceipt(printData, true);
+        console.log(`[BILLING] Print completed for invoice #${dailyInvoiceNumber}`);
+      } catch (printError: any) {
+        console.error(`[BILLING] Print failed for invoice #${dailyInvoiceNumber}:`, printError);
+        // Don't block the billing flow if print fails - order is already saved
+        // User can print later from the invoice view
+      }
 
     } catch (err: any) {
       console.error("[BILLING ERROR] Billing failed:", err);
@@ -1124,8 +1327,16 @@ const App: React.FC = () => {
     }
   };
 
+  const handleDeleteExpense = async (expenseId: number) => {
+    const { error } = await supabase.from('expenses').delete().eq('id', expenseId);
+    if(error) { 
+      alert(`Failed to delete expense: ${error.message}`); 
+    } else {
+      setExpenses(prev => prev.filter(exp => exp.id !== expenseId));
+    }
+  };
+
   const handleAddStockEntry = async (entry: Omit<StockEntry, 'id' | 'totalCost'>) => {
-    setLoading(true);
     const total_cost = entry.items.reduce((sum, item) => sum + (item.cost || 0) * (item.quantity || 0), 0);
     const { data: entryData, error: entryError } = await supabase.from('purchase_entries').insert({
         entry_date: entry.date,
@@ -1134,19 +1345,17 @@ const App: React.FC = () => {
         bill_image_url: entry.billImageUrl
     }).select().single();
 
-    if(entryError || !entryData) { alert(`Failed to create purchase entry: ${entryError?.message}`); setLoading(false); return; }
+    if(entryError || !entryData) { alert(`Failed to create purchase entry: ${entryError?.message}`); return; }
 
     const itemsToInsert = entry.items.map(item => ({ purchase_entry_id: entryData.id, ...item }));
     const { error: itemsError } = await supabase.from('purchase_items').insert(itemsToInsert);
-    if(itemsError) { alert(`Failed to save purchase items: ${itemsError.message}`); setLoading(false); return; }
+    if(itemsError) { alert(`Failed to save purchase items: ${itemsError.message}`); return; }
 
     const newEntry = mapPurchaseEntryToStockEntry({ ...entryData, purchase_items: entry.items });
     setStockEntries(prev => [newEntry, ...prev].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
-    setLoading(false);
   };
 
   const handleUpdateStockEntry = async (updatedEntry: StockEntry) => {
-    setLoading(true);
     const total_cost = updatedEntry.items.reduce((sum, item) => sum + (item.cost || 0) * (item.quantity || 0), 0);
     const { error: updateError } = await supabase.from('purchase_entries').update({
         entry_date: updatedEntry.date,
@@ -1154,33 +1363,84 @@ const App: React.FC = () => {
         total_cost,
         bill_image_url: updatedEntry.billImageUrl
     }).eq('id', updatedEntry.id);
-    if(updateError) { alert(`Failed to update entry: ${updateError.message}`); setLoading(false); return; }
+    if(updateError) { alert(`Failed to update entry: ${updateError.message}`); return; }
 
     const { error: deleteError } = await supabase.from('purchase_items').delete().eq('purchase_entry_id', updatedEntry.id);
-    if(deleteError) { alert(`Failed to clear old items: ${deleteError.message}`); setLoading(false); return; }
+    if(deleteError) { alert(`Failed to clear old items: ${deleteError.message}`); return; }
 
     const itemsToInsert = updatedEntry.items.map(item => ({ purchase_entry_id: updatedEntry.id, ...item }));
     const { error: insertError } = await supabase.from('purchase_items').insert(itemsToInsert);
-    if(insertError) { alert(`Failed to save new items: ${insertError.message}`); setLoading(false); return; }
+    if(insertError) { alert(`Failed to save new items: ${insertError.message}`); return; }
 
     setStockEntries(prev => prev.map(e => e.id === updatedEntry.id ? { ...updatedEntry, totalCost: total_cost } : e).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
-    setLoading(false);
   };
 
   const handleDeleteStockEntry = async (entryId: number) => {
     if (window.confirm('Are you sure you want to delete this stock entry?')) {
-        setLoading(true);
         const { error } = await supabase.from('purchase_entries').delete().eq('id', entryId);
         if(error) { alert(`Failed to delete entry: ${error.message}`); }
         else { setStockEntries(prev => prev.filter(entry => entry.id !== entryId)); }
-        setLoading(false);
     }
   };
   
   const handleAddProduct = async (productData: Omit<Product, 'id'>) => {
-    const { data, error } = await supabase.from('products').insert({ name: productData.name, price: productData.price, profit: productData.profit, category: productData.category, image_url: productData.imageUrl }).select().single();
+    // Get max display_order for this category to set new product's order
+    const categoryProducts = products.filter(p => p.category === productData.category);
+    const maxOrder = categoryProducts.length > 0 
+      ? Math.max(...categoryProducts.map(p => p.displayOrder || 0))
+      : 0;
+    const newDisplayOrder = maxOrder + 1;
+    
+    const { data, error } = await supabase.from('products').insert({ 
+      name: productData.name, 
+      price: productData.price, 
+      profit: productData.profit, 
+      category: productData.category, 
+      image_url: productData.imageUrl,
+      display_order: newDisplayOrder
+    }).select().single();
     if(error) { alert(`Failed to add product: ${error.message}`); }
-    else { setProducts(prev => [...prev, { ...data, imageUrl: data.image_url }]); }
+    else { 
+      setProducts(prev => [...prev, { 
+        ...data, 
+        imageUrl: data.image_url,
+        displayOrder: data.display_order || 0
+      }]); 
+    }
+  };
+
+  const handleReorderCategories = async (newOrder: string[]) => {
+    try {
+      // Update display_order for all categories based on new order
+      const updatePromises = newOrder.map((categoryName, index) => {
+        const category = categories.find(c => c.name === categoryName);
+        if (!category) return Promise.resolve();
+        
+        return supabase
+          .from('categories')
+          .update({ 
+            display_order: index + 1,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', category.id);
+      });
+
+      await Promise.all(updatePromises);
+      
+      // Update local state
+      const updatedCategories = newOrder.map((name, index) => {
+        const existing = categories.find(c => c.name === name);
+        return existing 
+          ? { ...existing, displayOrder: index + 1 }
+          : { id: 0, name, displayOrder: index + 1 };
+      }).filter(c => c.id !== 0);
+      
+      setCategories(updatedCategories);
+      console.log('[App] Category order updated successfully');
+    } catch (error: any) {
+      console.error('Failed to reorder categories:', error);
+      alert(`Failed to update category order: ${error.message}`);
+    }
   };
 
   const handleUpdateProduct = async (updatedProduct: Product) => {
@@ -1205,7 +1465,8 @@ const App: React.FC = () => {
         price: updatedProduct.price, 
         profit: updatedProduct.profit, 
         category: updatedProduct.category, 
-        image_url: updatedProduct.imageUrl || null // Explicitly set to null if empty
+        image_url: updatedProduct.imageUrl || null, // Explicitly set to null if empty
+        display_order: updatedProduct.displayOrder || 0
       })
       .eq('id', updatedProduct.id)
       .select()
@@ -1221,7 +1482,7 @@ const App: React.FC = () => {
       // Update local state with data from database (ensures consistency)
       setProducts(prev => prev.map(p => 
         p.id === updatedProduct.id 
-          ? { ...data, imageUrl: data.image_url || '' } 
+          ? { ...data, imageUrl: data.image_url || '', displayOrder: data.display_order || 0 } 
           : p
       ));
       
@@ -1236,7 +1497,7 @@ const App: React.FC = () => {
         console.log('[App] Refreshed product from DB:', refreshedProducts);
         setProducts(prev => prev.map(p => 
           p.id === updatedProduct.id 
-            ? { ...refreshedProducts, imageUrl: refreshedProducts.image_url || '' } 
+            ? { ...refreshedProducts, imageUrl: refreshedProducts.image_url || '', displayOrder: refreshedProducts.display_order || 0 }
             : p
         ));
       }
@@ -1387,6 +1648,8 @@ const App: React.FC = () => {
             onEditInvoice={handleEditInvoice}
             onDeleteInvoice={handleDeleteInvoice}
             onGoToNewOrder={handleGoToNewOrder}
+            onRetryLoadProducts={retryLoadProducts}
+            onReorderCategories={handleReorderCategories}
           />
         );
       case 'admin':
@@ -1398,6 +1661,7 @@ const App: React.FC = () => {
                 expenses={expenses}
                 stockEntries={stockEntries}
                 products={products}
+                categories={categories}
                 expenseItems={expenseItems}
                 onAddStockEntry={handleAddStockEntry}
                 onUpdateStockEntry={handleUpdateStockEntry}
@@ -1410,6 +1674,20 @@ const App: React.FC = () => {
                 onDeleteExpenseItem={handleDeleteExpenseItem}
                 installPromptEvent={installPromptEvent}
                 onInstallClick={handleInstallClick}
+                onCategoryAdded={async () => {
+                  // Reload categories when a new one is added
+                  const { data, error } = await supabase
+                    .from('categories')
+                    .select('*')
+                    .order('display_order', { ascending: true });
+                  if (!error && data) {
+                    setCategories(data.map((c: any) => ({
+                      id: c.id,
+                      name: c.name,
+                      displayOrder: c.display_order
+                    })));
+                  }
+                }}
             />
         );
       default:
@@ -1426,7 +1704,8 @@ const App: React.FC = () => {
     return (
         <div className="h-screen w-screen flex flex-col items-center justify-center bg-gray-100">
             <div className="text-3xl font-bold text-purple-800">Tea Time POS</div>
-            <div className="mt-4 text-gray-600">Connecting to database...</div>
+            <div className="mt-4 text-gray-600">Loading...</div>
+            <div className="mt-2 text-sm text-gray-500">This should only take a moment</div>
         </div>
     );
   }
@@ -1482,6 +1761,8 @@ const App: React.FC = () => {
         onClose={() => setExpenseModalOpen(false)}
         onAddExpense={handleAddExpense}
         dailyExpenseItems={dailyExpenseItems}
+        expenses={expenses}
+        onDeleteExpense={handleDeleteExpense}
       />
       <PasswordModal
         isOpen={isPasswordModalOpen}
@@ -1512,155 +1793,6 @@ const App: React.FC = () => {
           // Don't close order modal - let user decide when to print
         }}
       />
-      {orderPlacedInfo && (
-        <OrderPlacedModal
-          isOpen={!!orderPlacedInfo}
-          onClose={() => setOrderPlacedInfo(null)}
-          onPrint={async () => {
-            console.log('=== PRINT DEBUG START ===');
-            console.log('Printing invoice #', orderPlacedInfo.invoiceNumber);
-            console.log('OrderPlacedInfo:', JSON.parse(JSON.stringify(orderPlacedInfo))); // Deep copy for logging
-            
-            // ALWAYS use items directly from orderPlacedInfo - create a fresh copy
-            let itemsToPrint: Array<{ name: string; quantity: number; price: number }> = [];
-            
-            if (orderPlacedInfo.items && Array.isArray(orderPlacedInfo.items) && orderPlacedInfo.items.length > 0) {
-              // Create a fresh copy of items to avoid any mutation issues
-              itemsToPrint = orderPlacedInfo.items.map(item => ({
-                name: String(item.name || ''),
-                quantity: Number(item.quantity || 0),
-                price: Number(item.price || 0)
-              }));
-              
-              // Validate items belong to this invoice by checking count matches
-              console.log('Using items from orderPlacedInfo');
-              console.log('Items count from orderPlacedInfo:', itemsToPrint.length);
-            } else {
-              // Fallback: Try to find items from billedItems if not in orderPlacedInfo
-              console.warn('No items in orderPlacedInfo, trying billedItems filter...');
-              const invoiceItems = billedItems.filter(item => 
-                item.invoiceNumber === orderPlacedInfo.invoiceNumber
-              );
-              console.log('Found invoice items from billedItems:', invoiceItems);
-              console.log('Invoice items count from billedItems:', invoiceItems.length);
-              
-              if (invoiceItems.length > 0) {
-                itemsToPrint = invoiceItems.map(item => ({
-                  name: String(item.productName || ''),
-                  quantity: Number(item.quantity || 0),
-                  price: Number(item.price || 0)
-                }));
-              }
-            }
-            
-            // Final validation - ensure we have items and they match the invoice
-            console.log('=== ITEM VALIDATION ===');
-            console.log('Invoice Number:', orderPlacedInfo.invoiceNumber);
-            console.log('Final items to print:', itemsToPrint);
-            console.log('Final items count:', itemsToPrint.length);
-            
-            // Verify items array is clean and doesn't contain duplicates
-            const itemNames = itemsToPrint.map(i => i.name);
-            const uniqueNames = new Set(itemNames);
-            if (itemNames.length !== uniqueNames.size) {
-              console.warn('WARNING: Duplicate items detected!', itemNames);
-              // Remove duplicates, keeping first occurrence
-              const seen = new Set<string>();
-              itemsToPrint = itemsToPrint.filter(item => {
-                if (seen.has(item.name)) {
-                  return false;
-                }
-                seen.add(item.name);
-                return true;
-              });
-              console.log('After deduplication:', itemsToPrint);
-            }
-            
-            if (itemsToPrint.length > 0) {
-              try {
-                // Get date from current billing date or first billed item
-                const firstBilledItem = billedItems.find(item => item.invoiceNumber === orderPlacedInfo.invoiceNumber);
-                const timestamp = firstBilledItem?.timestamp || Date.now();
-                
-                const dateStr = new Date(timestamp).toLocaleDateString('en-US', { 
-                  year: 'numeric', 
-                  month: 'long', 
-                  day: 'numeric'
-                });
-                const timeStr = new Date(timestamp).toLocaleTimeString('en-US', {
-                  hour: '2-digit',
-                  minute: '2-digit'
-                });
-
-                const printData: PrintData = {
-                  invoiceNumber: orderPlacedInfo.invoiceNumber,
-                  date: dateStr,
-                  time: timeStr,
-                  items: itemsToPrint,
-                  totalAmount: orderPlacedInfo.totalAmount
-                };
-
-                console.log('=== PRINT DATA ===');
-                console.log('Print data invoice #:', printData.invoiceNumber);
-                console.log('Print data items count:', printData.items.length);
-                console.log('Print data items:', printData.items);
-                console.log('Print data total:', printData.totalAmount);
-                console.log('=== CHECKING FOR SAVED PRINTER ===');
-
-                // Check if printer is saved in settings
-                try {
-                  const { data: settings } = await supabase
-                    .from('printer_settings')
-                    .select('connection_type, selected_bluetooth_printer')
-                    .order('updated_at', { ascending: false })
-                    .limit(1)
-                    .maybeSingle();
-
-                  const hasSavedPrinter = settings && 
-                    settings.connection_type === 'Bluetooth' && 
-                    settings.selected_bluetooth_printer;
-
-                  if (hasSavedPrinter) {
-                    console.log('Found saved printer, printing directly...');
-                    await printReceipt(printData, true);
-                  } else {
-                    console.log('No saved printer found, showing selection modal...');
-                    // Show printer selection modal
-                    setPendingPrintData(printData);
-                    setIsPrinterSelectionModalOpen(true);
-                    return; // Don't close modal yet, wait for printer selection
-                  }
-                } catch (error: any) {
-                  console.warn('Error checking printer settings:', error);
-                  // If settings check fails, check if error is about no printer, then show modal
-                  if (error.code === 'PGRST116' || !error.code) {
-                    // No settings found, show printer selection modal
-                    setPendingPrintData(printData);
-                    setIsPrinterSelectionModalOpen(true);
-                    return;
-                  }
-                  // Otherwise, try printing (will throw error if no printer)
-                  await printReceipt(printData, true);
-                }
-                
-                console.log('=== PRINT COMPLETE ===');
-              } catch (error: any) {
-                console.error('=== PRINT ERROR ===', error);
-                alert(error.message || 'Failed to print. Please try again.');
-              }
-            } else {
-              console.error('=== NO ITEMS TO PRINT ===');
-              console.error('No items found for invoice #', orderPlacedInfo.invoiceNumber);
-              console.error('BilledItems length:', billedItems.length);
-              console.error('BilledItems sample:', billedItems.slice(0, 3));
-              alert('No items found for this invoice. Please try again.');
-            }
-            setOrderPlacedInfo(null);
-          }}
-          invoiceNumber={orderPlacedInfo.invoiceNumber}
-          totalAmount={orderPlacedInfo.totalAmount}
-        />
-      )}
     </div>
   );
 };

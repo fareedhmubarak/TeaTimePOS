@@ -30,6 +30,8 @@ interface POSViewProps {
   onEditInvoice: (invoiceNumber: number) => void;
   onDeleteInvoice: (invoiceNumber: number) => void;
   onGoToNewOrder: () => void;
+  onRetryLoadProducts?: () => Promise<void>;
+  onReorderCategories?: (newOrder: string[]) => void;
 }
 
 const POSView: React.FC<POSViewProps> = ({
@@ -57,6 +59,8 @@ const POSView: React.FC<POSViewProps> = ({
   onEditInvoice,
   onDeleteInvoice,
   onGoToNewOrder,
+  onRetryLoadProducts,
+  onReorderCategories,
 }) => {
   // Get all unique categories: ordered categories from DB + product categories not in DB
   const allCategories = useMemo(() => {
@@ -97,59 +101,6 @@ const POSView: React.FC<POSViewProps> = ({
     setMobileSidebarOpen(false);
   };
 
-  // Calculate product sales counts from last day only (or most recent working day with records)
-  const productSalesCounts = useMemo(() => {
-    const salesCounts = new Map<string, number>();
-    
-    // Find the most recent working day with records (max 7 days back)
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    // Find most recent date with records (check today first, then go back up to 7 days)
-    let targetDateStr: string | null = null;
-    for (let i = 0; i < 7; i++) {
-      const checkDate = new Date(today);
-      checkDate.setDate(today.getDate() - i);
-      const checkDateStr = checkDate.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' });
-      
-      // Check if this date has any records (only check once we find a match)
-      const hasRecords = billedItems.some(item => item.date === checkDateStr);
-      if (hasRecords) {
-        targetDateStr = checkDateStr;
-        break;
-      }
-    }
-    
-    // If no records found in last 7 days, use today (will result in 0 counts, but won't break)
-    if (!targetDateStr) {
-      targetDateStr = today.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' });
-    }
-    
-    // Count orders for each product from the target day only
-    // Track unique invoice numbers per product to count orders (not quantities)
-    const productInvoiceNumbers = new Map<string, Set<number>>();
-    
-    billedItems.forEach(item => {
-      // Only process items from the target day
-      if (item.date === targetDateStr) {
-        const productName = item.productName.toLowerCase();
-        
-        // Track unique invoice numbers for this product
-        if (!productInvoiceNumbers.has(productName)) {
-          productInvoiceNumbers.set(productName, new Set());
-        }
-        productInvoiceNumbers.get(productName)!.add(item.invoiceNumber);
-      }
-    });
-    
-    // Convert unique invoice counts to sales counts
-    productInvoiceNumbers.forEach((invoiceSet, productName) => {
-      salesCounts.set(productName, invoiceSet.size);
-    });
-    
-    return salesCounts;
-  }, [billedItems]);
-
   const filteredProducts = useMemo(() => {
     const categoryProducts = products.filter((p) => {
       if (selectedCategory === "FREQUENT") return p.category === "FREQUENT";
@@ -163,22 +114,21 @@ const POSView: React.FC<POSViewProps> = ({
       product.name.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
-    // Sort by sales count (most sold first), then alphabetically for products with same count
+    // Sort by display_order first (if available), then alphabetically
     return filtered.sort((a, b) => {
-      const aName = a.name.toLowerCase();
-      const bName = b.name.toLowerCase();
-      const aCount = productSalesCounts.get(aName) || 0;
-      const bCount = productSalesCounts.get(bName) || 0;
-      
-      // First sort by sales count (descending)
-      if (bCount !== aCount) {
-        return bCount - aCount;
+      // First sort by display_order (ascending) - products with display_order come first
+      const aOrder = a.displayOrder || 999999;
+      const bOrder = b.displayOrder || 999999;
+      if (aOrder !== bOrder) {
+        return aOrder - bOrder;
       }
       
-      // If same count, sort alphabetically
+      // If display_order is same or not set, sort alphabetically
+      const aName = a.name.toLowerCase();
+      const bName = b.name.toLowerCase();
       return aName.localeCompare(bName);
     });
-  }, [selectedCategory, searchTerm, products, productSalesCounts]);
+  }, [selectedCategory, searchTerm, products]);
 
   const isViewingHistory = viewedInvoiceNumber !== null;
   const displayOrder = isViewingHistory ? viewedOrder : activeOrder;
@@ -201,6 +151,7 @@ const POSView: React.FC<POSViewProps> = ({
         onSelectCategory={handleSelectCategory}
         isOpen={isMobileSidebarOpen}
         onClose={() => setMobileSidebarOpen(false)}
+        onReorderCategories={onReorderCategories}
       />
       <main className="flex flex-1 relative h-full overflow-hidden">
         <div className="flex-grow flex flex-col p-1 sm:p-2 overflow-hidden h-full">
@@ -210,6 +161,7 @@ const POSView: React.FC<POSViewProps> = ({
             searchTerm={searchTerm}
             onSearchChange={setSearchTerm}
             activeOrderItems={activeOrder.items}
+            onRetryLoadProducts={onRetryLoadProducts}
           />
         </div>
         <OrderPanel

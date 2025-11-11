@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Product } from '../types.ts';
+import { Product, Category } from '../types.ts';
 import { CATEGORIES } from '../constants.ts';
 import { XIcon } from './Icons.tsx';
 import { uploadProductImage } from '../utils/imageUpload.ts';
+import { supabase } from '../supabaseClient.ts';
 
 interface ProductModalProps {
   isOpen: boolean;
@@ -10,9 +11,19 @@ interface ProductModalProps {
   onSave: (productData: Omit<Product, 'id'>, id?: number) => void;
   productToEdit: Product | null;
   products?: Product[]; // Optional: to extract existing categories
+  categories?: Category[]; // Categories from database
+  onCategoryAdded?: () => void; // Callback when a new category is added
 }
 
-const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onSave, productToEdit, products = [] }) => {
+const ProductModal: React.FC<ProductModalProps> = ({ 
+  isOpen, 
+  onClose, 
+  onSave, 
+  productToEdit, 
+  products = [],
+  categories = [],
+  onCategoryAdded
+}) => {
   const [name, setName] = useState('');
   const [price, setPrice] = useState('');
   const [profit, setProfit] = useState('');
@@ -24,15 +35,50 @@ const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onSave, pr
   const [previewImage, setPreviewImage] = useState<string>('');
   const [isUploading, setIsUploading] = useState(false);
 
-  // Get all unique categories from existing products + default categories
+  // Get all unique categories from database categories table + product categories not in DB
+  // Use case-insensitive matching to avoid duplicates
   const allCategories = useMemo(() => {
-    const defaultCats = CATEGORIES.filter(c => c !== 'FREQUENT');
-    const productCats = products.map(p => p.category).filter((cat, index, self) => 
-      cat && cat !== 'FREQUENT' && self.indexOf(cat) === index
-    );
-    const uniqueCats = Array.from(new Set([...defaultCats, ...productCats])).sort();
+    // Get categories from database (categories table) - use uppercase for comparison
+    const dbCategories = categories.map(c => c.name);
+    const dbCategoriesUpper = dbCategories.map(c => c.toUpperCase());
+    
+    // Get unique product categories that aren't in the database (case-insensitive)
+    const productCats = products.map(p => p.category).filter((cat, index, self) => {
+      if (!cat || cat === 'FREQUENT') return false;
+      // Check if this is the first occurrence in products array
+      if (self.indexOf(cat) !== index) return false;
+      // Check if it's not in database (case-insensitive)
+      const catUpper = cat.toUpperCase();
+      return !dbCategoriesUpper.includes(catUpper);
+    });
+    
+    // For database categories, keep only one version per case-insensitive name
+    // Prefer the uppercase version if both exist, otherwise keep the first one found
+    const uniqueDbCategories: string[] = [];
+    const seenUpper = new Set<string>();
+    const categoryMap = new Map<string, string>(); // Maps uppercase -> actual category name
+    
+    // First pass: collect all categories, prefer uppercase versions
+    dbCategories.forEach(cat => {
+      const catUpper = cat.toUpperCase();
+      if (!categoryMap.has(catUpper)) {
+        categoryMap.set(catUpper, cat);
+      } else {
+        // If we already have this category, prefer uppercase version
+        const existing = categoryMap.get(catUpper)!;
+        if (cat === cat.toUpperCase() && existing !== existing.toUpperCase()) {
+          categoryMap.set(catUpper, cat);
+        }
+      }
+    });
+    
+    // Convert map values to array
+    uniqueDbCategories.push(...Array.from(categoryMap.values()));
+    
+    // Combine: database categories first, then product categories
+    const uniqueCats = Array.from(new Set([...uniqueDbCategories, ...productCats])).sort();
     return uniqueCats;
-  }, [products]);
+  }, [categories, products]);
 
   useEffect(() => {
     if (productToEdit) {
@@ -186,11 +232,48 @@ const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onSave, pr
     const profitNum = parseFloat(profit);
 
     // Determine final category
-    const finalCategory = isNewCategory ? newCategory.trim() : category;
+    let finalCategory = isNewCategory ? newCategory.trim().toUpperCase() : category;
     
     if (!finalCategory) {
       alert('Please enter a category.');
       return;
+    }
+
+    // If it's a new category, add it to the categories table first
+    if (isNewCategory) {
+      try {
+        // Check if category already exists (case-insensitive)
+        const existingCategory = categories.find(c => c.name.toUpperCase() === finalCategory.toUpperCase());
+        
+        if (!existingCategory) {
+          // Get max display_order
+          const maxOrder = categories.length > 0 
+            ? Math.max(...categories.map(c => c.displayOrder)) 
+            : 0;
+
+          // Add new category to database
+          const { error: categoryError } = await supabase
+            .from('categories')
+            .insert({
+              name: finalCategory,
+              display_order: maxOrder + 1,
+            });
+
+          if (categoryError) {
+            // If insert fails (e.g., duplicate), just use the name
+            console.warn('Failed to add category to database:', categoryError);
+            // Continue with the product save anyway
+          } else {
+            // Notify parent that a category was added
+            if (onCategoryAdded) {
+              onCategoryAdded();
+            }
+          }
+        }
+      } catch (error: any) {
+        console.error('Error adding category:', error);
+        // Continue with product save even if category add fails
+      }
     }
 
     if (name.trim() && !isNaN(priceNum) && !isNaN(profitNum) && priceNum >= 0 && profitNum >= 0) {
