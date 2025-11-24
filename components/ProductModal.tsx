@@ -3,7 +3,6 @@ import { Product, Category } from '../types.ts';
 import { CATEGORIES } from '../constants.ts';
 import { XIcon } from './Icons.tsx';
 import { uploadProductImage } from '../utils/imageUpload.ts';
-import { supabase } from '../supabaseClient.ts';
 
 interface ProductModalProps {
   isOpen: boolean;
@@ -28,8 +27,6 @@ const ProductModal: React.FC<ProductModalProps> = ({
   const [price, setPrice] = useState('');
   const [profit, setProfit] = useState('');
   const [category, setCategory] = useState(CATEGORIES.find(c => c !== 'FREQUENT') || 'TEA');
-  const [isNewCategory, setIsNewCategory] = useState(false);
-  const [newCategory, setNewCategory] = useState('');
   const [imageUrl, setImageUrl] = useState('');
   const [imageMethod, setImageMethod] = useState<'url' | 'upload' | 'camera'>('url');
   const [previewImage, setPreviewImage] = useState<string>('');
@@ -86,15 +83,12 @@ const ProductModal: React.FC<ProductModalProps> = ({
       setPrice(productToEdit.price.toString());
       setProfit(productToEdit.profit.toString());
       const editCategory = productToEdit.category === 'FREQUENT' ? (productToEdit as any).originalCategory || 'TEA' : productToEdit.category;
-      // Check if category exists in the list, if not, it's a new category
+      // Check if category exists in the list
       if (allCategories.includes(editCategory)) {
         setCategory(editCategory);
-        setIsNewCategory(false);
-        setNewCategory('');
       } else {
-        setCategory('__NEW__');
-        setIsNewCategory(true);
-        setNewCategory(editCategory);
+        // If category doesn't exist, use first available category
+        setCategory(allCategories[0] || 'Tea');
       }
       setImageUrl(productToEdit.imageUrl);
       setPreviewImage(productToEdit.imageUrl || '');
@@ -113,9 +107,7 @@ const ProductModal: React.FC<ProductModalProps> = ({
         setName('');
         setPrice('');
         setProfit('');
-        setCategory(allCategories[0] || 'TEA');
-        setIsNewCategory(false);
-        setNewCategory('');
+        setCategory(allCategories[0] || 'Tea');
         setImageUrl('');
         setPreviewImage('');
         setImageMethod('url');
@@ -210,15 +202,7 @@ const ProductModal: React.FC<ProductModalProps> = ({
 
   const handleCategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const value = e.target.value;
-    if (value === '__NEW__') {
-      setIsNewCategory(true);
-      setNewCategory('');
-      setCategory('__NEW__');
-    } else {
-      setIsNewCategory(false);
-      setNewCategory('');
-      setCategory(value);
-    }
+    setCategory(value);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -231,49 +215,12 @@ const ProductModal: React.FC<ProductModalProps> = ({
     const priceNum = parseFloat(price);
     const profitNum = parseFloat(profit);
 
-    // Determine final category
-    let finalCategory = isNewCategory ? newCategory.trim().toUpperCase() : category;
+    // Use selected category directly
+    const finalCategory = category;
     
     if (!finalCategory) {
-      alert('Please enter a category.');
+      alert('Please select a category.');
       return;
-    }
-
-    // If it's a new category, add it to the categories table first
-    if (isNewCategory) {
-      try {
-        // Check if category already exists (case-insensitive)
-        const existingCategory = categories.find(c => c.name.toUpperCase() === finalCategory.toUpperCase());
-        
-        if (!existingCategory) {
-          // Get max display_order
-          const maxOrder = categories.length > 0 
-            ? Math.max(...categories.map(c => c.displayOrder)) 
-            : 0;
-
-          // Add new category to database
-          const { error: categoryError } = await supabase
-            .from('categories')
-            .insert({
-              name: finalCategory,
-              display_order: maxOrder + 1,
-            });
-
-          if (categoryError) {
-            // If insert fails (e.g., duplicate), just use the name
-            console.warn('Failed to add category to database:', categoryError);
-            // Continue with the product save anyway
-          } else {
-            // Notify parent that a category was added
-            if (onCategoryAdded) {
-              onCategoryAdded();
-            }
-          }
-        }
-      } catch (error: any) {
-        console.error('Error adding category:', error);
-        // Continue with product save even if category add fails
-      }
     }
 
     if (name.trim() && !isNaN(priceNum) && !isNaN(profitNum) && priceNum >= 0 && profitNum >= 0) {
@@ -364,20 +311,10 @@ const ProductModal: React.FC<ProductModalProps> = ({
                     value={category} 
                     onChange={handleCategoryChange} 
                     className="mt-1 w-full p-2 border rounded-md bg-white"
+                    required
                 >
                     {allCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                    <option value="__NEW__">+ Enter New Category</option>
                 </select>
-                {isNewCategory && (
-                    <input
-                        type="text"
-                        value={newCategory}
-                        onChange={e => setNewCategory(e.target.value)}
-                        placeholder="Enter new category name"
-                        className="mt-2 w-full p-2 border rounded-md bg-white"
-                        required
-                    />
-                )}
             </div>
             <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Product Image (Optional)</label>
