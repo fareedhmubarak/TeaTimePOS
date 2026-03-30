@@ -84,7 +84,7 @@ const ProductManagementPage: React.FC<ProductManagementPageProps> = ({
         const product = products.find(p => p.id === productId);
         if (!product) return;
 
-        const categoryProducts = products
+        const categoryProducts = [...products]
             .filter(p => p.category === product.category)
             .sort((a, b) => {
                 const aOrder = a.displayOrder || 0;
@@ -105,31 +105,34 @@ const ProductManagementPage: React.FC<ProductManagementPageProps> = ({
             return; // Can't move
         }
 
-        const targetProduct = categoryProducts[targetIndex];
-        const currentOrder = product.displayOrder || currentIndex + 1;
-        const targetOrder = targetProduct.displayOrder || targetIndex + 1;
+        // Remove item and insert at new position
+        const reordered = categoryProducts.filter(p => p.id !== productId);
+        reordered.splice(targetIndex, 0, product);
 
-        // Swap display orders
+        // Assign sequential display_order (1, 2, 3, ...) to all items
         try {
-            // Update current product
-            const { error: error1 } = await supabase
-                .from('products')
-                .update({ display_order: targetOrder })
-                .eq('id', productId);
+            const updates: Promise<any>[] = [];
+            const localUpdates: { product: Product; newOrder: number }[] = [];
 
-            if (error1) throw error1;
+            reordered.forEach((p, index) => {
+                const newOrder = index + 1;
+                if (p.displayOrder !== newOrder) {
+                    updates.push(
+                        supabase
+                            .from('products')
+                            .update({ display_order: newOrder })
+                            .eq('id', p.id)
+                            .then(({ error }) => { if (error) throw error; })
+                    );
+                    localUpdates.push({ product: p, newOrder });
+                }
+            });
 
-            // Update target product
-            const { error: error2 } = await supabase
-                .from('products')
-                .update({ display_order: currentOrder })
-                .eq('id', targetProduct.id);
+            await Promise.all(updates);
 
-            if (error2) throw error2;
-
-            // Update local state
-            onUpdateProduct({ ...product, displayOrder: targetOrder });
-            onUpdateProduct({ ...targetProduct, displayOrder: currentOrder });
+            localUpdates.forEach(({ product: p, newOrder }) => {
+                onUpdateProduct({ ...p, displayOrder: newOrder });
+            });
         } catch (error: any) {
             console.error('Failed to update product order:', error);
             alert(`Failed to update product order: ${error.message}`);
@@ -176,7 +179,7 @@ const ProductManagementPage: React.FC<ProductManagementPageProps> = ({
         }
 
         // Get all products in the same category, sorted by current order
-        const categoryProducts = products
+        const categoryProducts = [...products]
             .filter(p => p.category === draggedProduct.category)
             .sort((a, b) => {
                 const aOrder = a.displayOrder || 0;
@@ -193,30 +196,35 @@ const ProductManagementPage: React.FC<ProductManagementPageProps> = ({
             return;
         }
 
-        // Swap the display orders
-        const draggedOrder = draggedProduct.displayOrder || draggedIndex + 1;
-        const targetOrder = targetProduct.displayOrder || targetIndex + 1;
+        // Remove dragged item and insert at target position
+        const reordered = categoryProducts.filter(p => p.id !== draggedProductId);
+        reordered.splice(targetIndex > draggedIndex ? targetIndex - 1 : targetIndex, 0, draggedProduct);
 
+        // Assign sequential display_order (1, 2, 3, ...) to all items
         try {
-            // Update dragged product
-            const { error: error1 } = await supabase
-                .from('products')
-                .update({ display_order: targetOrder })
-                .eq('id', draggedProductId);
+            const updates: Promise<any>[] = [];
+            const localUpdates: { product: Product; newOrder: number }[] = [];
 
-            if (error1) throw error1;
+            reordered.forEach((product, index) => {
+                const newOrder = index + 1;
+                if (product.displayOrder !== newOrder) {
+                    updates.push(
+                        supabase
+                            .from('products')
+                            .update({ display_order: newOrder })
+                            .eq('id', product.id)
+                            .then(({ error }) => { if (error) throw error; })
+                    );
+                    localUpdates.push({ product, newOrder });
+                }
+            });
 
-            // Update target product
-            const { error: error2 } = await supabase
-                .from('products')
-                .update({ display_order: draggedOrder })
-                .eq('id', targetProductId);
+            await Promise.all(updates);
 
-            if (error2) throw error2;
-
-            // Update local state
-            onUpdateProduct({ ...draggedProduct, displayOrder: targetOrder });
-            onUpdateProduct({ ...targetProduct, displayOrder: draggedOrder });
+            // Update local state for all changed items
+            localUpdates.forEach(({ product, newOrder }) => {
+                onUpdateProduct({ ...product, displayOrder: newOrder });
+            });
         } catch (error: any) {
             console.error('Failed to update product order:', error);
             alert(`Failed to update product order: ${error.message}`);
