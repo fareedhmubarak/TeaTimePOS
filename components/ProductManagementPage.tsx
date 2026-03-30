@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Product, Category } from '../types.ts';
 import ProductModal from './ProductModal.tsx';
-import { PlusIcon, PencilIcon, TrashIcon, SearchIcon, ArrowUpIcon, ArrowDownIcon } from './Icons.tsx';
+import { PlusIcon, PencilIcon, TrashIcon, SearchIcon } from './Icons.tsx';
 import { supabase } from '../supabaseClient.ts';
 
 interface ProductManagementPageProps {
@@ -79,8 +79,8 @@ const ProductManagementPage: React.FC<ProductManagementPageProps> = ({
         });
     }, [products, selectedCategory, searchTerm]);
 
-    // Update product display order by moving up/down
-    const handleMoveProduct = async (productId: number, direction: 'up' | 'down') => {
+    // Change product position via dropdown
+    const handleOrderChange = async (productId: number, newPosition: number) => {
         const product = products.find(p => p.id === productId);
         if (!product) return;
 
@@ -94,16 +94,9 @@ const ProductManagementPage: React.FC<ProductManagementPageProps> = ({
             });
 
         const currentIndex = categoryProducts.findIndex(p => p.id === productId);
-        if (currentIndex === -1) return;
-
-        let targetIndex: number;
-        if (direction === 'up' && currentIndex > 0) {
-            targetIndex = currentIndex - 1;
-        } else if (direction === 'down' && currentIndex < categoryProducts.length - 1) {
-            targetIndex = currentIndex + 1;
-        } else {
-            return; // Can't move
-        }
+        if (currentIndex === -1 || newPosition < 1 || newPosition > categoryProducts.length) return;
+        const targetIndex = newPosition - 1;
+        if (currentIndex === targetIndex) return;
 
         // Remove item and insert at new position
         const reordered = categoryProducts.filter(p => p.id !== productId);
@@ -137,105 +130,6 @@ const ProductManagementPage: React.FC<ProductManagementPageProps> = ({
             console.error('Failed to update product order:', error);
             alert(`Failed to update product order: ${error.message}`);
         }
-    };
-
-    // Handle drag and drop for product ordering
-    const [draggedProductId, setDraggedProductId] = useState<number | null>(null);
-    const [dragOverProductId, setDragOverProductId] = useState<number | null>(null);
-
-    const handleDragStart = (e: React.DragEvent, productId: number) => {
-        setDraggedProductId(productId);
-        e.dataTransfer.effectAllowed = 'move';
-        e.dataTransfer.setData('text/html', productId.toString());
-    };
-
-    const handleDragOver = (e: React.DragEvent, productId: number) => {
-        e.preventDefault();
-        e.dataTransfer.dropEffect = 'move';
-        if (draggedProductId !== productId) {
-            setDragOverProductId(productId);
-        }
-    };
-
-    const handleDragLeave = () => {
-        setDragOverProductId(null);
-    };
-
-    const handleDrop = async (e: React.DragEvent, targetProductId: number) => {
-        e.preventDefault();
-        setDragOverProductId(null);
-
-        if (!draggedProductId || draggedProductId === targetProductId) {
-            setDraggedProductId(null);
-            return;
-        }
-
-        const draggedProduct = products.find(p => p.id === draggedProductId);
-        const targetProduct = products.find(p => p.id === targetProductId);
-
-        if (!draggedProduct || !targetProduct || draggedProduct.category !== targetProduct.category) {
-            setDraggedProductId(null);
-            return;
-        }
-
-        // Get all products in the same category, sorted by current order
-        const categoryProducts = [...products]
-            .filter(p => p.category === draggedProduct.category)
-            .sort((a, b) => {
-                const aOrder = a.displayOrder || 0;
-                const bOrder = b.displayOrder || 0;
-                if (aOrder !== bOrder) return aOrder - bOrder;
-                return a.name.localeCompare(b.name);
-            });
-
-        const draggedIndex = categoryProducts.findIndex(p => p.id === draggedProductId);
-        const targetIndex = categoryProducts.findIndex(p => p.id === targetProductId);
-
-        if (draggedIndex === -1 || targetIndex === -1) {
-            setDraggedProductId(null);
-            return;
-        }
-
-        // Remove dragged item and insert at target position
-        const reordered = categoryProducts.filter(p => p.id !== draggedProductId);
-        reordered.splice(targetIndex > draggedIndex ? targetIndex - 1 : targetIndex, 0, draggedProduct);
-
-        // Assign sequential display_order (1, 2, 3, ...) to all items
-        try {
-            const updates: Promise<any>[] = [];
-            const localUpdates: { product: Product; newOrder: number }[] = [];
-
-            reordered.forEach((product, index) => {
-                const newOrder = index + 1;
-                if (product.displayOrder !== newOrder) {
-                    updates.push(
-                        supabase
-                            .from('products')
-                            .update({ display_order: newOrder })
-                            .eq('id', product.id)
-                            .then(({ error }) => { if (error) throw error; })
-                    );
-                    localUpdates.push({ product, newOrder });
-                }
-            });
-
-            await Promise.all(updates);
-
-            // Update local state for all changed items
-            localUpdates.forEach(({ product, newOrder }) => {
-                onUpdateProduct({ ...product, displayOrder: newOrder });
-            });
-        } catch (error: any) {
-            console.error('Failed to update product order:', error);
-            alert(`Failed to update product order: ${error.message}`);
-        }
-
-        setDraggedProductId(null);
-    };
-
-    const handleDragEnd = () => {
-        setDraggedProductId(null);
-        setDragOverProductId(null);
     };
 
     return (
@@ -303,42 +197,32 @@ const ProductManagementPage: React.FC<ProductManagementPageProps> = ({
                         </thead>
                         <tbody>
                             {filteredProducts.map((product, index) => {
-                                const categoryProducts = products.filter(p => p.category === product.category);
-                                const sortedCategoryProducts = categoryProducts.sort((a, b) => {
-                                    const aOrder = a.displayOrder || 0;
-                                    const bOrder = b.displayOrder || 0;
-                                    if (aOrder !== bOrder) return aOrder - bOrder;
-                                    return a.name.localeCompare(b.name);
-                                });
-                                const categoryIndex = sortedCategoryProducts.findIndex(p => p.id === product.id);
-                                const canMoveUp = categoryIndex > 0;
-                                const canMoveDown = categoryIndex < sortedCategoryProducts.length - 1;
-
-                                const isDragging = draggedProductId === product.id;
-                                const isDragOver = dragOverProductId === product.id;
+                                const categoryProducts = [...products]
+                                    .filter(p => p.category === product.category)
+                                    .sort((a, b) => {
+                                        const aOrder = a.displayOrder || 0;
+                                        const bOrder = b.displayOrder || 0;
+                                        if (aOrder !== bOrder) return aOrder - bOrder;
+                                        return a.name.localeCompare(b.name);
+                                    });
+                                const categoryIndex = categoryProducts.findIndex(p => p.id === product.id);
+                                const currentPosition = categoryIndex + 1;
                                 
                                 return (
                                     <tr 
                                         key={product.id} 
-                                        draggable
-                                        onDragStart={(e) => handleDragStart(e, product.id)}
-                                        onDragOver={(e) => handleDragOver(e, product.id)}
-                                        onDragLeave={handleDragLeave}
-                                        onDrop={(e) => handleDrop(e, product.id)}
-                                        onDragEnd={handleDragEnd}
-                                        className={`bg-white border-b hover:bg-gray-50 cursor-move transition-colors ${
-                                            isDragging ? 'opacity-50' : ''
-                                        } ${
-                                            isDragOver ? 'bg-purple-100 border-purple-300' : ''
-                                        }`}
+                                        className="bg-white border-b hover:bg-gray-50"
                                     >
                                         <td className="px-6 py-4">
-                                            <div className="flex items-center space-x-2">
-                                                <div className="flex items-center justify-center w-8 h-8 rounded border-2 border-dashed border-gray-300 text-gray-400 text-sm font-medium">
-                                                    {product.displayOrder || categoryIndex + 1}
-                                                </div>
-                                                <span className="text-xs text-gray-500">Drag to reorder</span>
-                                            </div>
+                                            <select
+                                                value={currentPosition}
+                                                onChange={(e) => handleOrderChange(product.id, parseInt(e.target.value))}
+                                                className="w-16 bg-white border border-gray-300 rounded-md py-1.5 px-2 text-center text-base font-medium text-gray-700 focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                                            >
+                                                {categoryProducts.map((_, i) => (
+                                                    <option key={i + 1} value={i + 1}>{i + 1}</option>
+                                                ))}
+                                            </select>
                                         </td>
                                         <td className="px-6 py-4 font-medium text-gray-900">{product.name}</td>
                                         <td className="px-6 py-4">{product.category}</td>

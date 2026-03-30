@@ -1150,32 +1150,7 @@ const App: React.FC = () => {
       setBilledItems(prev => [...syncedBilledItems, ...prev]);
       console.log(`[BILLING] Updated billedItems state with invoice #${dailyInvoiceNumber}`);
 
-      // STEP 6: PREPARE PRINT DATA
-      const itemsForPrint = itemsToBill.map(item => ({
-        name: String(item.product.name || ''),
-        quantity: Number(item.quantity || 0),
-        price: Number((item.product.price * item.quantity).toFixed(2))
-      }));
-
-      const printDateString = new Date(`${billDateForDB}T00:00:00`).toLocaleDateString('en-US', { 
-        year: 'numeric', 
-        month: 'long', 
-        day: 'numeric'
-      });
-      const timeStr = new Date().toLocaleTimeString('en-US', {
-        hour: '2-digit',
-        minute: '2-digit'
-      });
-
-      const printData: PrintData = {
-        invoiceNumber: dailyInvoiceNumber,
-        date: printDateString,
-        time: timeStr,
-        items: itemsForPrint,
-        totalAmount: Number(total_amount.toFixed(2))
-      };
-
-      // STEP 7: CLEAR ORDER (only after successful save)
+      // STEP 6: CLEAR ORDER (only after successful save)
       const isLastOrder = activeOrderIndex === orders.length - 1;
       const isHeldOrder = orders.length > 1 && !isLastOrder;
       
@@ -1190,16 +1165,7 @@ const App: React.FC = () => {
         handleClearOrder();
       }
 
-      // STEP 8: PRINT DIRECTLY (no popup)
-      try {
-        console.log(`[BILLING] Printing invoice #${dailyInvoiceNumber} directly...`);
-        await printReceipt(printData, true);
-        console.log(`[BILLING] Print completed for invoice #${dailyInvoiceNumber}`);
-      } catch (printError: any) {
-        console.error(`[BILLING] Print failed for invoice #${dailyInvoiceNumber}:`, printError);
-        // Don't block the billing flow if print fails - order is already saved
-        // User can print later from the invoice view
-      }
+      console.log(`[BILLING] Invoice #${dailyInvoiceNumber} saved successfully. DB ID: ${newInvoiceId}`);
 
     } catch (err: any) {
       console.error("[BILLING ERROR] Billing failed:", err);
