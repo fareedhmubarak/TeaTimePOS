@@ -610,71 +610,39 @@ const App: React.FC = () => {
     });
   }, []);
 
+  // Detect if already running as installed PWA (standalone mode)
+  const [isStandalone, setIsStandalone] = useState(() => {
+    return (window.navigator as any).standalone === true ||
+           window.matchMedia('(display-mode: standalone)').matches;
+  });
+
   useEffect(() => {
+    // Capture the install prompt event — preventDefault stops the browser's
+    // default mini-infobar so we can show our own install UI instead.
     const handleBeforeInstallPrompt = (e: Event) => {
-        console.log('✅ PWA: Install prompt event received! Browser will show install icon in toolbar', e);
-        // Don't prevent default - let browser show install icon in toolbar automatically
-        // Store the event for programmatic triggering if needed
+        e.preventDefault();
+        console.log('PWA: beforeinstallprompt captured');
         setInstallPromptEvent(e);
     };
 
-    // Check PWA installability
-    const checkPWAInstallability = async () => {
-        console.log('🔍 Checking PWA installability...');
-        
-        if ('serviceWorker' in navigator) {
-            try {
-                const registration = await navigator.serviceWorker.getRegistration();
-                if (registration) {
-                    console.log('✅ PWA: Service Worker registered', registration.scope);
-                    console.log('✅ PWA: Service Worker active:', registration.active !== null);
-                    console.log('✅ PWA: Service Worker state:', registration.active?.state || 'N/A');
-                } else {
-                    console.warn('❌ PWA: Service Worker not registered');
-                }
-            } catch (err) {
-                console.error('❌ PWA: Service Worker check failed', err);
-            }
-        }
-
-        // Check manifest
-        try {
-            const response = await fetch('/manifest.json');
-            if (response.ok) {
-                const manifest = await response.json();
-                console.log('✅ PWA: Manifest loaded', manifest);
-                console.log('📋 Manifest icons:', manifest.icons?.length || 0);
-                console.log('📋 Manifest display:', manifest.display);
-            } else {
-                console.error('❌ PWA: Manifest not found');
-            }
-        } catch (err) {
-            console.error('❌ PWA: Manifest fetch failed', err);
-        }
-
-        // Check if app is already installed
-        const isStandalone = (window.navigator as any).standalone || window.matchMedia('(display-mode: standalone)').matches;
-        if (isStandalone) {
-            console.log('ℹ️ PWA: App is already installed (standalone mode detected)');
-        }
+    // When the app is successfully installed, clear the prompt so the
+    // install button disappears immediately.
+    const handleAppInstalled = () => {
+        console.log('PWA: App was installed');
+        setInstallPromptEvent(null);
+        setIsStandalone(true);
     };
+
+    // Also listen for display-mode changes (e.g. user opens installed app)
+    const standaloneQuery = window.matchMedia('(display-mode: standalone)');
+    const handleStandaloneChange = (e: MediaQueryListEvent) => {
+        setIsStandalone(e.matches);
+        if (e.matches) setInstallPromptEvent(null);
+    };
+    standaloneQuery.addEventListener('change', handleStandaloneChange);
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-    
-    // Check installability multiple times to catch the event
-    setTimeout(checkPWAInstallability, 2000);
-    setTimeout(checkPWAInstallability, 5000);
-    setTimeout(checkPWAInstallability, 10000);
-    
-    // Also check when user interacts with the page (engagement requirement)
-    const checkOnInteraction = () => {
-        console.log('👆 User interaction detected - rechecking installability');
-        checkPWAInstallability();
-        document.removeEventListener('click', checkOnInteraction);
-        document.removeEventListener('keydown', checkOnInteraction);
-    };
-    document.addEventListener('click', checkOnInteraction, { once: true });
-    document.addEventListener('keydown', checkOnInteraction, { once: true });
+    window.addEventListener('appinstalled', handleAppInstalled);
 
     // Service Worker update detection
     let printerSelectionHandler: EventListener | null = null;
@@ -716,6 +684,8 @@ const App: React.FC = () => {
 
     return () => {
         window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+        window.removeEventListener('appinstalled', handleAppInstalled);
+        standaloneQuery.removeEventListener('change', handleStandaloneChange);
         if (printerSelectionHandler) {
           window.removeEventListener('showPrinterSelection', printerSelectionHandler);
         }
@@ -1775,6 +1745,32 @@ const App: React.FC = () => {
         onUpdate={handleUpdateApp}
         onDismiss={() => setShowUpdateNotification(false)}
       />
+      {/* Floating PWA Install Banner — visible on all screens when app is not installed */}
+      {!isStandalone && installPromptEvent && (
+        <div className="fixed bottom-4 left-4 right-4 z-50 flex items-center justify-between bg-purple-700 text-white rounded-xl shadow-2xl px-4 py-3 md:left-auto md:right-4 md:max-w-sm animate-slide-up">
+          <div className="flex items-center gap-3 min-w-0">
+            <span className="text-2xl flex-shrink-0">☕</span>
+            <div className="min-w-0">
+              <p className="font-semibold text-sm leading-tight">Install Tea Time POS</p>
+              <p className="text-xs text-purple-200 leading-tight">Add to home screen for quick access</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0 ml-3">
+            <button
+              onClick={() => setInstallPromptEvent(null)}
+              className="text-purple-200 hover:text-white text-sm px-2 py-1"
+            >
+              Later
+            </button>
+            <button
+              onClick={handleInstallClick}
+              className="bg-white text-purple-700 font-bold text-sm px-4 py-1.5 rounded-lg hover:bg-purple-50 transition-colors"
+            >
+              Install
+            </button>
+          </div>
+        </div>
+      )}
       <PrinterSelectionModal
         isOpen={isPrinterSelectionModalOpen}
         onClose={() => {

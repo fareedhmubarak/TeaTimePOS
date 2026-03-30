@@ -1,194 +1,120 @@
-// Version number - Update this when you push new code to trigger auto-updates
-// Change this version number whenever you deploy new code to trigger automatic updates
-const APP_VERSION = '1.0.11';
-const CACHE_NAME = `tea-time-pos-cache-v${APP_VERSION}`;
+// Version - bump this to trigger auto-updates on deploy
+const APP_VERSION = '1.0.12';
+const CACHE_NAME = `tea-time-pos-v${APP_VERSION}`;
+const OFFLINE_URL = '/offline.html';
 
-// NEVER cache these - always fetch from network
-const NETWORK_ONLY_PATTERNS = [
-  /\.js$/,
-  /\.ts$/,
-  /\.tsx$/,
-  /\.mjs$/,
-  /\/@vite\//,
-  /\/node_modules\//,
-  /supabase\.co/, // Never cache Supabase API calls
+// Pre-cache these during install for offline support
+const PRECACHE_URLS = [
+  OFFLINE_URL,
+];
+
+// Bypass patterns - never intercept these requests
+const BYPASS_PATTERNS = [
+  /supabase\.co/,
   /supabase\.io/,
-  /\/api\//,
-  /\/rest\/v1\//, // Supabase REST API
-  /\/storage\/v1\//, // Supabase Storage
-  /\/auth\/v1\//, // Supabase Auth
-  /\/realtime\/v1\//, // Supabase Realtime
+  /sycfmzaxktwdcxwiqbbw/,
 ];
 
-// Cache only static assets (images, icons, manifest)
+// Cache only static assets (images, icons, fonts)
 const CACHEABLE_PATTERNS = [
-  /\.png$/,
-  /\.jpg$/,
-  /\.jpeg$/,
-  /\.gif$/,
-  /\.svg$/,
-  /\.ico$/,
-  /manifest\.json$/,
-  /\.woff$/,
-  /\.woff2$/,
-  /\.ttf$/,
-  /\.eot$/,
+  /\.png(\?.*)?$/,
+  /\.jpg(\?.*)?$/,
+  /\.jpeg(\?.*)?$/,
+  /\.gif(\?.*)?$/,
+  /\.svg(\?.*)?$/,
+  /\.ico(\?.*)?$/,
+  /\.woff2?(\?.*)?$/,
+  /\.ttf(\?.*)?$/,
+  /\.eot(\?.*)?$/,
 ];
 
-// Event: install
-// Fired when the service worker is first installed.
+// Install: pre-cache offline page so Chrome sees offline capability
 self.addEventListener('install', event => {
-  console.log('Service Worker: Installing version', APP_VERSION);
-  // Skip waiting to activate immediately - force update
-  self.skipWaiting();
-  
-  // Clear ALL caches immediately on install - don't cache anything
+  console.log('[SW] Installing version', APP_VERSION);
   event.waitUntil(
-    caches.keys().then(cacheNames => {
-      return Promise.all(
-        cacheNames.map(cacheName => {
-          console.log('Service Worker: Deleting ALL caches on install:', cacheName);
-          return caches.delete(cacheName);
-        })
-      );
-    }).then(() => {
-      console.log('Service Worker: All caches cleared on install');
-      // Don't cache anything during install - we'll use network-only
-    })
+    caches.open(CACHE_NAME)
+      .then(cache => {
+        console.log('[SW] Pre-caching offline page');
+        return cache.addAll(PRECACHE_URLS);
+      })
+      .then(() => self.skipWaiting())
   );
 });
 
-// Event: fetch
-// Use NETWORK-ONLY strategy for all app files to prevent stale cache issues
+// Activate: delete OLD version caches only, keep current
+self.addEventListener('activate', event => {
+  console.log('[SW] Activating version', APP_VERSION);
+  event.waitUntil(
+    caches.keys()
+      .then(names => Promise.all(
+        names
+          .filter(name => name !== CACHE_NAME)
+          .map(name => {
+            console.log('[SW] Deleting old cache:', name);
+            return caches.delete(name);
+          })
+      ))
+      .then(() => self.clients.claim())
+      .then(() => {
+        return self.clients.matchAll().then(clients => {
+          clients.forEach(client => {
+            client.postMessage({ type: 'SW_ACTIVATED', version: APP_VERSION });
+          });
+        });
+      })
+  );
+});
+
+// Fetch handler
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
   const requestUrl = event.request.url;
-  const requestMethod = event.request.method;
-  
-  // CRITICAL: Don't intercept Supabase API requests at all - let them pass through untouched
-  // Supabase requests must include API key headers which can be lost if we modify the request
-  // If we don't call event.respondWith(), the browser handles the request normally
-  // Check for supabase.co or supabase.io domains - MUST be first check
-  if (requestUrl.includes('supabase.co') || 
-      requestUrl.includes('supabase.io') || 
-      url.hostname.includes('supabase') ||
-      url.hostname.includes('sycfmzaxktwdcxwiqbbw')) {
-    // Don't intercept - let browser handle normally (preserves all headers)
-    // Explicitly return undefined to ensure no interception
-    console.log('[SW] Bypassing Supabase request:', requestUrl);
+
+  // 1. Bypass Supabase requests entirely - preserve all headers
+  if (BYPASS_PATTERNS.some(p => p.test(requestUrl) || p.test(url.hostname))) {
     return;
   }
-  
-  // Also skip OPTIONS requests (CORS preflight) - let browser handle
-  if (requestMethod === 'OPTIONS') {
+
+  // 2. Skip CORS preflight
+  if (event.request.method === 'OPTIONS') {
     return;
   }
-  
-  // NEVER cache POST, PUT, DELETE requests (API calls)
-  if (requestMethod !== 'GET') {
+
+  // 3. Non-GET: network only
+  if (event.request.method !== 'GET') {
     event.respondWith(fetch(event.request));
     return;
   }
-  
-  // NEVER cache these - always fetch from network
-  const isNetworkOnly = NETWORK_ONLY_PATTERNS.some(pattern => pattern.test(requestUrl)) ||
-                        url.pathname === '/' ||
-                        url.pathname === '/index.html' ||
-                        url.pathname.endsWith('.html');
-  
-  if (isNetworkOnly) {
-    // Always fetch from network, never use cache
+
+  // 4. Navigation requests (HTML pages): network-first with offline fallback
+  //    This is CRITICAL for PWA installability - Chrome checks this offline
+  if (event.request.mode === 'navigate') {
     event.respondWith(
-      fetch(event.request, {
-        cache: 'no-store', // Force no cache
-        headers: {
-          ...event.request.headers,
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-        }
-      }).catch(err => {
-        console.error('Network fetch failed for:', requestUrl, err);
-        throw err; // Don't fallback to cache for critical files
+      fetch(event.request).catch(() => {
+        return caches.match(OFFLINE_URL);
       })
     );
     return;
   }
-  
-  // For static assets only, use network-first with cache fallback
-  const isCacheable = CACHEABLE_PATTERNS.some(pattern => pattern.test(requestUrl));
-  
-  if (isCacheable) {
-    // Network-first strategy: try network first, fallback to cache only if offline
+
+  // 5. Static assets: network-first with cache fallback
+  if (CACHEABLE_PATTERNS.some(p => p.test(requestUrl))) {
     event.respondWith(
-      fetch(event.request, {
-        cache: 'no-cache', // Always validate with server
-        headers: {
-          'Cache-Control': 'no-cache',
-        }
-      })
+      fetch(event.request)
         .then(response => {
-          // Only cache successful responses
           if (response && response.status === 200) {
-            const responseToCache = response.clone();
-            caches.open(CACHE_NAME).then(cache => {
-              cache.put(event.request, responseToCache);
-            });
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
           }
           return response;
         })
-        .catch(() => {
-          // Fallback to cache only for static assets when offline
-          return caches.match(event.request);
-        })
+        .catch(() => caches.match(event.request))
     );
     return;
   }
-  
-  // For everything else, use network-only
-  event.respondWith(
-    fetch(event.request, {
-      cache: 'no-store',
-      headers: {
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-        'Pragma': 'no-cache',
-      }
-    }).catch(err => {
-      console.error('Fetch failed:', requestUrl, err);
-      throw err;
-    })
-  );
-});
 
-// Event: activate
-// Fired when a new service worker takes over. Clear ALL old caches aggressively.
-self.addEventListener('activate', event => {
-  console.log('Service Worker: Activating version', APP_VERSION);
-  event.waitUntil(
-    Promise.all([
-      // Delete ALL caches (we'll rebuild only what we need)
-      caches.keys().then(cacheNames => {
-        return Promise.all(
-          cacheNames.map(cacheName => {
-            console.log('Service Worker: Deleting old cache', cacheName);
-            return caches.delete(cacheName);
-          })
-        );
-      }),
-      // Take control of all clients immediately
-      self.clients.claim()
-    ]).then(() => {
-      console.log('Service Worker: Activated and ready - all old caches cleared');
-      // Notify all clients about the update
-      return self.clients.matchAll().then(clients => {
-        clients.forEach(client => {
-          client.postMessage({
-            type: 'SW_ACTIVATED',
-            version: APP_VERSION
-          });
-        });
-      });
-    })
-  );
+  // 6. Everything else: network only
+  event.respondWith(fetch(event.request));
 });
 
 // Listen for messages from the app
@@ -196,18 +122,7 @@ self.addEventListener('message', event => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();
   }
-  
-  if (event.data && event.data.type === 'CLEAR_CACHE') {
-    // Clear all caches when requested
-    caches.keys().then(cacheNames => {
-      return Promise.all(
-        cacheNames.map(cacheName => caches.delete(cacheName))
-      );
-    }).then(() => {
-      event.ports[0].postMessage({ success: true });
-    });
-  }
-  
+
   if (event.data && event.data.type === 'CHECK_UPDATE') {
     event.ports[0].postMessage({ version: APP_VERSION });
   }
