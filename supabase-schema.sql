@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS products (
     profit DECIMAL(10, 2) NOT NULL,
     category TEXT NOT NULL,
     image_url TEXT,
+    display_order INTEGER DEFAULT 0,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
