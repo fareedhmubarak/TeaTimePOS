@@ -113,7 +113,7 @@ const ProductManagementPage: React.FC<ProductManagementPageProps> = ({
         try {
             // Update current product
             const { error: error1 } = await supabase
-                .from('tbl_products')
+                .from('products')
                 .update({ display_order: targetOrder })
                 .eq('id', productId);
 
@@ -121,7 +121,7 @@ const ProductManagementPage: React.FC<ProductManagementPageProps> = ({
 
             // Update target product
             const { error: error2 } = await supabase
-                .from('tbl_products')
+                .from('products')
                 .update({ display_order: currentOrder })
                 .eq('id', targetProduct.id);
 
@@ -200,7 +200,7 @@ const ProductManagementPage: React.FC<ProductManagementPageProps> = ({
         try {
             // Update dragged product
             const { error: error1 } = await supabase
-                .from('tbl_products')
+                .from('products')
                 .update({ display_order: targetOrder })
                 .eq('id', draggedProductId);
 
@@ -208,7 +208,7 @@ const ProductManagementPage: React.FC<ProductManagementPageProps> = ({
 
             // Update target product
             const { error: error2 } = await supabase
-                .from('tbl_products')
+                .from('products')
                 .update({ display_order: draggedOrder })
                 .eq('id', targetProductId);
 

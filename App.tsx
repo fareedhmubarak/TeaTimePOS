@@ -234,7 +234,7 @@ const App: React.FC = () => {
   const retryLoadProducts = useCallback(async () => {
     try {
       console.log('[retryLoadProducts] Retrying to load products from database...');
-      const { data, error } = await supabase.from('tbl_products').select('*');
+      const { data, error } = await supabase.from('products').select('*');
       
       if (error) {
         console.error('[retryLoadProducts] Error:', error);
@@ -479,7 +479,7 @@ const App: React.FC = () => {
             const todayDateStr = `${todayIST.getFullYear()}-${String(todayIST.getMonth() + 1).padStart(2, '0')}-${String(todayIST.getDate()).padStart(2, '0')}`;
             
             const [productsResult, categoriesResult, invoicesResult] = await Promise.allSettled([
-                retryQuery(() => supabase.from('tbl_products').select('*'), 3, 1000, true), // 3 retries, 1s delay
+                retryQuery(() => supabase.from('products').select('*'), 3, 1000, true), // 3 retries, 1s delay
                 retryQuery(() => supabase.from('categories').select('*').order('display_order', { ascending: true }), 3, 1000),
                 retryQuery(() => {
                     // Fetch ALL invoices for today (no limit) + last 7 days for context
@@ -505,7 +505,7 @@ const App: React.FC = () => {
                 // Try one more time with a simple query (no retry wrapper)
                 console.log('🔄 Attempting final product load retry...');
                 try {
-                    const { data, error } = await supabase.from('tbl_products').select('*');
+                    const { data, error } = await supabase.from('products').select('*');
                     if (!error && data) {
                         const loadedProducts = data.map((p: any) => ({ 
                             ...p, 
@@ -1361,7 +1361,7 @@ const App: React.FC = () => {
       : 0;
     const newDisplayOrder = maxOrder + 1;
     
-    const { data, error } = await supabase.from('tbl_products').insert({ 
+    const { data, error } = await supabase.from('products').insert({ 
       name: productData.name, 
       price: productData.price, 
       profit: productData.profit, 
@@ -1429,7 +1429,7 @@ const App: React.FC = () => {
     }
     
     const { data, error } = await supabase
-      .from('tbl_products')
+      .from('products')
       .update({ 
         name: updatedProduct.name, 
         price: updatedProduct.price, 
@@ -1458,7 +1458,7 @@ const App: React.FC = () => {
       
       // Also refresh products from database to ensure we have the latest data
       const { data: refreshedProducts, error: refreshError } = await supabase
-        .from('tbl_products')
+        .from('products')
         .select('*')
         .eq('id', updatedProduct.id)
         .single();
@@ -1482,7 +1482,7 @@ const App: React.FC = () => {
         await deleteProductImage(product.imageUrl);
       }
       
-      const { error } = await supabase.from('tbl_products').delete().eq('id', productId);
+      const { error } = await supabase.from('products').delete().eq('id', productId);
       if(error) { alert(`Failed to delete product: ${error.message}`); }
       else { setProducts(prev => prev.filter(p => p.id !== productId)); }
     }

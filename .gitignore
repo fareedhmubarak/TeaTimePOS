@@ -46,3 +46,4 @@ ios/
 
 # Ngrok
 ngrok-url.txt
+.playwright-mcp/
